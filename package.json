@@ -10,7 +10,9 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.117.0",
     "lucide-react": "^0.475.0",
+    "mammoth": "^1.12.3",
     "next": "^15.2.5",
+    "pdfjs-dist": "^6.3.289",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

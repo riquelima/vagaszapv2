@@ -1,28 +1,6 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
-import { execFile } from 'child_process';
-import util from 'util';
 import { createClient } from '@supabase/supabase-js';
-
-const execFileAsync = util.promisify(execFile);
-
-// Vercel serverless filesystem is read-only except /tmp. We MUST use os.tmpdir()
-// and never path.join(process.cwd(), 'tmp') because process.cwd() === /var/task
-// and that directory is read-only at runtime, causing:
-//   ENOENT: no such file or directory, mkdir '/var/task/tmp'
-function writableTmpDir(): string {
-  const base = os.tmpdir() || '/tmp';
-  const dir = path.join(base, 'vagaszap-resume');
-  try {
-    fs.mkdirSync(dir, { recursive: true });
-  } catch {
-    // Last-resort fallback to /tmp itself (always writable on Vercel).
-    return '/tmp';
-  }
-  return dir;
-}
+import { parseResumeBuffer } from '@/lib/resume-parser';
 
 function getSupabase() {
   // Server-only env vars (no NEXT_PUBLIC_ prefix). We accept the old
@@ -123,38 +101,14 @@ export async function POST(request: Request) {
             ? '.jpg'
             : '.pdf';
 
-    // Always write to a writable tmp dir (os.tmpdir() resolves to /tmp on Vercel).
-    const scriptPath = path.join(process.cwd(), 'scripts', 'process_resume.py');
-    const tmpDir = writableTmpDir();
-    const tmpPath = path.join(
-      tmpDir,
-      `cv_${Date.now()}_${Math.random().toString(36).substring(7)}${safeExt}`,
-    );
-
-    fs.writeFileSync(tmpPath, buffer);
-
-    let stdout: string;
-    try {
-      const result = await execFileAsync('python3', [scriptPath, tmpPath], {
-        timeout: 55000,
-        maxBuffer: 15 * 1024 * 1024,
-      });
-      stdout = result.stdout;
-    } finally {
-      try {
-        fs.unlinkSync(tmpPath);
-      } catch {
-        /* best-effort cleanup */
-      }
-    }
-
-    const result = JSON.parse(stdout);
+    // Parse the buffer in pure Node — no Python dependency, works on Vercel.
+    const result = await parseResumeBuffer(buffer, originalFileName);
     if (!result.success || !result.profile) {
       throw new Error(result.error || 'Falha ao processar o currículo.');
     }
 
     // Resolve the public URL of the file we already have in Storage
-    // (either the client uploaded it directly, or the legacy path uploaded
+    // (either the client uploaded it directly, or the legacy path uploads
     // it below). Re-uploading from buffer is idempotent thanks to upsert.
     let resumeUrl = '';
     const finalStorageName = storagePath
@@ -183,7 +137,7 @@ export async function POST(request: Request) {
       console.warn('Supabase client not initialized, skipping resume URL.');
     }
 
-    result.profile.resume_url = resumeUrl;
+    (result.profile as Record<string, unknown>).resume_url = resumeUrl;
 
     return NextResponse.json({
       success: true,
