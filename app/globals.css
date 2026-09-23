@@ -60,7 +60,7 @@
   --content-max-width: 1240px;
   --content-side-padding: 16px;          /* mobile */
   --content-side-padding-desktop: 24px;
-  --fab-safe-bottom: 96px;               /* espaço para o botão flutuante */
+  --fab-safe-bottom: 0px;                 /* (FAB removido) */
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 
   /* Sticky surface translúcida */
@@ -1035,31 +1035,6 @@ small, .text-caption { line-height: var(--caption-lh); }
   font-weight: 700;
   padding-right: 4px;
 }
-
-/* ─── FAB "N" — botão flutuante decorativo (renderizar opcional) ───── */
-.vz-fab {
-  position: fixed;
-  right: calc(16px + var(--safe-bottom));
-  bottom: calc(16px + var(--safe-bottom));
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: #0a0a0a;
-  color: #FFFFFF;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28), 0 4px 8px rgba(0, 0, 0, 0.15);
-  cursor: pointer;
-  z-index: 60;
-  font-weight: 800;
-  font-size: 1.25rem;
-  letter-spacing: -0.02em;
-  transition: transform 0.15s var(--ease-out-cubic), box-shadow 0.15s ease;
-}
-.vz-fab:active { transform: scale(0.92); box-shadow: 0 4px 14px rgba(0,0,0,0.18); }
-.vz-fab:focus-visible { outline: 3px solid var(--blue-accent); outline-offset: 3px; }
 
 /* ─── Inputs — tipo 16px para não auto-zoomar no iOS ─────────────── */
 input, select, textarea {

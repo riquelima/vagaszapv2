@@ -2705,16 +2705,6 @@ export default function HomePage() {
       )}
 
 
-      {/* 7C. FAB "N" — botão flutuante decorativo (não obstrui conteúdo: body tem padding-bottom 96px) */}
-      <button
-        className="vz-fab"
-        aria-label="Notificações"
-        title="Notificações"
-        type="button"
-      >
-        N
-      </button>
-
       {/* 8. FOOTER (WHITEPACE NAVY) */}
       <footer style={{
         background: 'var(--navy-primary)',
