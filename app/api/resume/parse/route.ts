@@ -25,11 +25,15 @@ function writableTmpDir(): string {
 }
 
 function getSupabase() {
-  // Prefer the service role key (server-only) to download files regardless of
-  // bucket RLS. Fall back to the anon key if not configured.
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  // Server-only env vars (no NEXT_PUBLIC_ prefix). We accept the old
+  // NEXT_PUBLIC_* names as a fallback for projects that haven't migrated yet.
+  const url =
+    process.env.SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    '';
   const serviceKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     '';
   if (!url || !serviceKey) return null;

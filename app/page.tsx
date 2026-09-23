@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import { supabase } from '@/lib/supabase';
+import { supabase, getSupabaseClient } from '@/lib/supabase';
 import {
   Upload,
   FileText,
@@ -853,7 +853,8 @@ export default function HomePage() {
     const storagePath = `${Date.now()}_${Math.random().toString(36).substring(7)}${safeExt}`;
 
     try {
-      const { error: uploadError } = await supabase.storage
+      const sb = await getSupabaseClient();
+      const { error: uploadError } = await sb.storage
         .from('resumes')
         .upload(storagePath, file, {
           contentType: file.type || 'application/octet-stream',
