@@ -16,7 +16,7 @@ export interface JobItem {
   applicationLink: string;
   summary: string;
   tags: string[];
-  category: 'tech' | 'operations';
+  category: 'tech' | 'operations' | 'sales' | 'marketing' | 'design' | 'data' | 'hr' | 'finance' | 'ai' | string;
 }
 
 const AI_CONVERSATIONAL_PATTERNS = [
@@ -42,7 +42,7 @@ const AI_CONVERSATIONAL_PATTERNS = [
   /colar o texto/i
 ];
 
-function sanitizeJobSummary(title: string, company: string, rawSummary: string | undefined, category: 'tech' | 'operations'): string {
+function sanitizeJobSummary(title: string, company: string, rawSummary: string | undefined, category: string): string {
   const text = (rawSummary || '').trim();
   const hasAIBug = AI_CONVERSATIONAL_PATTERNS.some(regex => regex.test(text));
   const isTooShort = text.length < 25;
@@ -51,11 +51,21 @@ function sanitizeJobSummary(title: string, company: string, rawSummary: string |
     return text;
   }
 
-  if (category === 'tech') {
-    return `Oportunidade técnica para atuar como ${title} na ${company}. Posição 100% remota com foco no desenvolvimento de soluções de alto impacto, boas práticas de engenharia e colaboração internacional com times globais.`;
-  } else {
-    return `Vaga de ${title} na ${company}. Posição 100% remota com foco no suporte operacional, excelência no relacionamento com clientes e otimização contínua de processos do dia a dia.`;
-  }
+  const roleTypes: Record<string, string> = {
+    tech: 'técnica para atuar',
+    sales: 'na área comercial/sucesso do cliente para atuar',
+    marketing: 'em marketing e growth para atuar',
+    design: 'em design e experiência para atuar',
+    data: 'em dados e analytics para atuar',
+    hr: 'em pessoas e cultura para atuar',
+    finance: 'em backoffice (financeiro/jurídico/admin) para atuar',
+    ai: 'em inteligência artificial e automação para atuar',
+    operations: 'em operações para atuar'
+  };
+
+  const roleText = roleTypes[category] || 'para atuar';
+
+  return `Oportunidade ${roleText} como ${title} na ${company}. Posição 100% remota com foco em excelência e colaboração internacional com times globais.`;
 }
 
 export async function GET(request: Request) {
@@ -76,7 +86,7 @@ export async function GET(request: Request) {
     // Exclui vagas do Himalayas (redirecionam para portal intermediário, sem suporte a Auto-Apply)
     query = query.not('application_link', 'ilike', '%himalayas.app%');
 
-    if (category === 'tech' || category === 'operations') {
+    if (category && category !== 'all' && category !== 'match') {
       query = query.eq('category', category);
     }
 

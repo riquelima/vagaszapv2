@@ -45,7 +45,12 @@ import {
   ChevronDown,
   ChevronUp,
   Link2,
-  Lightbulb
+  Lightbulb,
+  LineChart,
+  Palette,
+  Database,
+  Building,
+  Bot
 } from 'lucide-react';
 
 interface JobItem {
@@ -85,6 +90,7 @@ interface CandidateProfile {
   strengths?: string[];
   weaknesses?: string[];
   improvements?: string[];
+  resume_url?: string;
 }
 
 // ─── Automation Compatibility Score ─────────────────────────────────────────
@@ -510,7 +516,7 @@ function buildGreenhouseSearchQuery(profile: CandidateProfile | null): string {
 }
 
 export default function HomePage() {
-  const [activeTab, setActiveTab] = useState<'all' | 'tech' | 'operations' | 'match'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'tech' | 'operations' | 'sales' | 'marketing' | 'design' | 'data' | 'hr' | 'finance' | 'ai' | 'match'>('all');
   const [selectedPeriod, setSelectedPeriod] = useState<'all' | 'today' | 'yesterday' | 'week' | 'month'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortByMatch, setSortByMatch] = useState(false);
@@ -557,6 +563,7 @@ export default function HomePage() {
           const parsed = JSON.parse(saved);
           const sanitized = sanitizeCjkFrontend(parsed);
           setCandidateProfile(sanitized);
+          setActiveTab('match');
         }
         if (savedFile) {
           setUploadedFile(JSON.parse(savedFile));
@@ -773,6 +780,7 @@ export default function HomePage() {
       if (data.success && data.profile) {
         const sanitized = sanitizeCjkFrontend(data.profile);
         setCandidateProfile(sanitized);
+        setActiveTab('match');
         setUploadedFile({ name: data.fileName, size: data.fileSize });
         if (typeof window !== 'undefined') {
           try {
@@ -826,139 +834,53 @@ export default function HomePage() {
   };
 
   const triggerAutoApply = async (job: JobItem) => {
-    // ── FEATURE TEMPORARILY DISABLED ──
-    setAppliedJobsHistory(prev => ({
-      ...prev,
-      [job.id]: {
-        jobId: job.id,
-        timestamp: new Date().toISOString(),
-        status: 'COMING_SOON',
-        confirmationId: 'Em breve'
-      }
-    }));
-    return;
-
-    if (!candidateProfile) {
+    if (!candidateProfile || !candidateProfile.resume_url) {
       setShowUploadAlert(true);
       const el = document.getElementById('curriculo-section');
       el?.scrollIntoView({ behavior: 'smooth' });
       return;
     }
 
+    if (!job.applicationLink?.includes('boards.greenhouse.io')) {
+      alert("A versão atual do Auto-Apply Mágico suporta apenas vagas do Greenhouse.");
+      window.open(job.applicationLink, '_blank');
+      return;
+    }
+
     setSelectedJobForApply(job);
-    setApplyStep(1);
+    setApplyStep(1); // 1 = loading
     setApplyResult(null);
 
-    // ── BLOQUEIO PREVENTIVO: Himalayas e hosts intermediários ────────────────────
-    const link = (job.applicationLink || '').toLowerCase();
-    if (link.includes('himalayas.app') || link.includes('himalayas.com')) {
-      setApplyStep(4);
-      setApplyResult({
-        success: false,
-        status: 'BLOCKED',
-        error: 'Portal intermediário bloqueado. Esta vaga não é ATS oficial.',
-      });
-      return;
-    }
-
-    // ── ATS oficial (Greenhouse/Ashby/Lever/Workable) → Extensão Chrome ─────
-    if (isOfficialAtsJob(job)) {
-      if (!isExtensionInstalled) {
-        setApplyStep(4);
-        setApplyResult({
-          success: false,
-          status: 'EXTENSION_MISSING',
-          error: 'Extensão VagasZap não detectada. Instale-a via chrome://extensions e clique em "Sync com Extensão" antes de candidatar-se.',
-        });
-        return;
-      }
-
-      // Sincroniza o perfil mais recente
-      syncProfileToExtension();
-
-      // 1) Abre a vaga em nova aba imediatamente
-      const newWindow = window.open(job.applicationLink, '_blank', 'noopener,noreferrer');
-      if (!newWindow) {
-        setApplyStep(4);
-        setApplyResult({
-          success: false,
-          status: 'POPUP_BLOCKED',
-          error: 'Pop-up bloqueado. Permita pop-ups para esta página.',
-        });
-        return;
-      }
-      try { newWindow.focus(); } catch {}
-
-      // 2) Delega para a extensão (que vai preencher a aba aberta).
-      // Mostra IMEDIATAMENTE o step 5 com a orientação: "a extensão assumiu,
-      // continue na nova aba aberta". Isso destrava o modal que ficava preso.
-      setApplyStep(2); // IA gerando carta
-      window.postMessage(
-        { type: 'VAGASZAP_TRIGGER_APPLY', job },
-        '*'
-      );
-
-      // Fallback: se após 4s a extensão não confirmar nada (porque a aba
-      // do ATS está carregando ou a comunicação cross-tab demora), já
-      // apresentamos a tela "A extensão assumiu" para não travar a UI.
-      setTimeout(() => {
-        setApplyResult((prev: any) =>
-            prev?.success === true
-              ? prev
-              : {
-                success: true,
-                message: `A extensão VagasZap assumiu. Vá para a aba "${job.company || 'da vaga'}" aberta no Chrome e acompanhe o preenchimento.`,
-                atsType: 'VagasZap Extensão',
-                appliedAt: new Date().toISOString(),
-                pendingConfirmation: true,
-              }
-        );
-        setApplyStep((s) => (s >= 4 ? s : 5));
-      }, 4000);
-      return;
-    }
-
-    // ── AUTO-APPLY SERVER-SIDE (Playwright headless) — fallback para outros tipos ──
     try {
-      setApplyStep(2); // IA gerando carta
-      const res = await fetch('/api/apply/auto', {
+      const res = await fetch('/api/apply/greenhouse-auto', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job, profile: candidateProfile }),
+        body: JSON.stringify({
+          job_url: job.applicationLink,
+          profile: candidateProfile
+        })
       });
-
       const data = await res.json();
-      console.log('[VagasZap] Auto-Apply result:', data);
-
-      setApplyStep(4); // Enviando / aguardando
-
-      if (data?.success) {
-        setApplyResult(data);
-        setApplyStep(5); // Concluído com sucesso
+      if (data.success) {
+        setApplyResult({ success: true, message: data.message });
+        setAppliedJobsHistory(prev => ({
+          ...prev,
+          [job.id]: {
+            jobId: job.id,
+            timestamp: new Date().toISOString(),
+            status: 'APPLIED',
+            confirmationId: 'IA_AUTO'
+          }
+        }));
       } else {
-        // Falha → mostra detalhes na modal de step 4
-        setApplyResult({
-          success: false,
-          status: data?.status || 'ERROR',
-          error: data?.error || 'Falha desconhecida no servidor.',
-          atsType: data?.atsType,
-          emptyFields: data?.emptyFields,
-          filledFields: data?.filledFields,
-          coverLetter: data?.coverLetter,
-          elapsedSeconds: data?.elapsedSeconds,
-        });
-        setApplyStep(4);
+        setApplyResult({ success: false, error: data.error });
       }
-    } catch (err: any) {
-      console.error('[VagasZap] Erro ao chamar /api/apply/auto:', err);
-      setApplyResult({
-        success: false,
-        status: 'NETWORK_ERROR',
-        error: `Falha ao contatar o servidor: ${err?.message || err}`,
-      });
-      setApplyStep(4);
+    } catch (e: any) {
+      setApplyResult({ success: false, error: 'Falha de conexão com a API de Auto-Apply.' });
     }
   };
+
+
 
   // ── AUTO APPLY LINKEDIN (via extensão Chrome) ─────────────────────────
   const [linkedinRunning, setLinkedinRunning] = useState(false);
@@ -1769,56 +1691,47 @@ export default function HomePage() {
               Todas as Vagas ({jobs.length})
             </button>
 
-            <button
-              onClick={(e) => {
-                setActiveTab('tech');
-                e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-              }}
-              style={{
-                background: activeTab === 'tech' ? 'var(--navy-primary)' : 'transparent',
-                color: activeTab === 'tech' ? '#FFFFFF' : 'var(--text-muted)',
-                border: 'none',
-                padding: '8px 16px',
-                borderRadius: '7px',
-                fontSize: '0.84rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                transition: 'all 0.15s ease',
-                whiteSpace: 'nowrap',
-                flexShrink: 0,
-              }}
-            >
-              <Code2 size={14} strokeWidth={2} />
-              <span>Tecnologia & Produto</span>
-            </button>
-            <button
-              onClick={(e) => {
-                setActiveTab('operations');
-                e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-              }}
-              style={{
-                background: activeTab === 'operations' ? 'var(--navy-primary)' : 'transparent',
-                color: activeTab === 'operations' ? '#FFFFFF' : 'var(--text-muted)',
-                border: 'none',
-                padding: '8px 16px',
-                borderRadius: '7px',
-                fontSize: '0.84rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                transition: 'all 0.15s ease',
-                whiteSpace: 'nowrap',
-                flexShrink: 0,
-              }}
-            >
-              <Briefcase size={14} strokeWidth={1.75} />
-              <span>Operações & Negócios</span>
-            </button>
+            {[
+              { id: 'tech', label: 'Tecnologia & Produto', icon: Code2 },
+              { id: 'operations', label: 'Operações & Negócios', icon: Briefcase },
+              { id: 'sales', label: 'Vendas & CS', icon: TrendingUp },
+              { id: 'marketing', label: 'Marketing & Growth', icon: LineChart },
+              { id: 'design', label: 'Design & UX', icon: Palette },
+              { id: 'data', label: 'Dados & Analytics', icon: Database },
+              { id: 'hr', label: 'Pessoas & Cultura', icon: Users },
+              { id: 'finance', label: 'Financeiro & Admin', icon: Building },
+              { id: 'ai', label: 'IA & Automação', icon: Bot },
+            ].map(tab => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={(e) => {
+                    setActiveTab(tab.id as any);
+                    e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                  }}
+                  style={{
+                    background: activeTab === tab.id ? 'var(--navy-primary)' : 'transparent',
+                    color: activeTab === tab.id ? '#FFFFFF' : 'var(--text-muted)',
+                    border: 'none',
+                    padding: '8px 16px',
+                    borderRadius: '7px',
+                    fontSize: '0.84rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.15s ease',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Icon size={14} strokeWidth={2} />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
           </div>
 
           {/* Campo de Busca */}
@@ -2353,14 +2266,14 @@ export default function HomePage() {
             {/* Header Modal */}
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', marginBottom: '18px' }}>
               <div>
-                <span className="badge-clean badge-tech" style={{ marginBottom: '6px' }}>
-                  Aba Oficial Aberta no Chrome
+                <span className="badge-clean badge-tech" style={{ marginBottom: '6px', background: '#DBEAFE', color: '#1E40AF', borderColor: '#BFDBFE' }}>
+                  Auto-Apply Mágico 🪄
                 </span>
                 <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--navy-primary)' }}>
                   {selectedJobForApply.title}
                 </h3>
                 <div style={{ fontSize: '0.86rem', color: 'var(--blue-accent)', fontWeight: 600 }}>
-                  {selectedJobForApply.company} • Auto-Apply em Execução
+                  {selectedJobForApply.company} • Via API Server-side
                 </div>
               </div>
 
@@ -2381,130 +2294,29 @@ export default function HomePage() {
               </button>
             </div>
 
-            {/* Stepper de Execução Numerado */}
+            {/* Status do Processamento */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', margin: '20px 0' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {applyStep === 1 && !applyResult && (
                 <div style={{
-                  width: '26px',
-                  height: '26px',
-                  borderRadius: '50%',
-                  background: applyStep >= 2 ? 'var(--green-success)' : (applyStep === 1 ? 'var(--navy-primary)' : 'var(--bg-subtle)'),
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: applyStep >= 1 ? '#FFFFFF' : 'var(--text-muted)',
-                  fontSize: '0.78rem',
-                  fontWeight: 700
+                  background: 'var(--navy-subtle)',
+                  border: '1px solid #BFDBFE',
+                  borderRadius: '8px',
+                  padding: '18px 16px',
+                  textAlign: 'center'
                 }}>
-                  {applyStep >= 2 ? <Check size={14} /> : (applyStep === 1 ? <Loader2 size={14} className="animate-spin-slow" /> : '1')}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', color: 'var(--navy-primary)', fontWeight: 700, fontSize: '0.92rem' }}>
+                    <Loader2 size={17} className="animate-spin-slow" color="var(--blue-accent)" />
+                    <span>Conectando à API Oficial e deduzindo respostas...</span>
+                  </div>
+                  <div style={{ fontSize: '0.81rem', color: 'var(--text-body)', marginTop: '8px', lineHeight: 1.55 }}>
+                    A Minimax está analisando seu currículo em tempo real e preenchendo todos os campos personalizados exigidos pela <strong>{selectedJobForApply.company}</strong>.
+                  </div>
                 </div>
-                <div style={{ fontSize: '0.88rem', color: applyStep >= 1 ? 'var(--navy-primary)' : 'var(--text-muted)', fontWeight: applyStep === 1 ? 600 : 400 }}>
-                  Mapeando requisitos e formulário oficial da vaga
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{
-                  width: '26px',
-                  height: '26px',
-                  borderRadius: '50%',
-                  background: applyStep >= 3 ? 'var(--green-success)' : (applyStep === 2 ? 'var(--navy-primary)' : 'var(--bg-subtle)'),
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: applyStep >= 2 ? '#FFFFFF' : 'var(--text-muted)',
-                  fontSize: '0.78rem',
-                  fontWeight: 700
-                }}>
-                  {applyStep >= 3 ? <Check size={14} /> : (applyStep === 2 ? <Loader2 size={14} className="animate-spin-slow" /> : '2')}
-                </div>
-                <div style={{ fontSize: '0.88rem', color: applyStep >= 2 ? 'var(--navy-primary)' : 'var(--text-muted)', fontWeight: applyStep === 2 ? 600 : 400 }}>
-                  Elaborando carta de apresentação personalizada para a vaga
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{
-                  width: '26px',
-                  height: '26px',
-                  borderRadius: '50%',
-                  background: applyStep >= 4 ? 'var(--green-success)' : (applyStep === 3 ? 'var(--navy-primary)' : 'var(--bg-subtle)'),
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: applyStep >= 3 ? '#FFFFFF' : 'var(--text-muted)',
-                  fontSize: '0.78rem',
-                  fontWeight: 700
-                }}>
-                  {applyStep >= 4 ? <Check size={14} /> : (applyStep === 3 ? <Loader2 size={14} className="animate-spin-slow" /> : '3')}
-                </div>
-                <div style={{ fontSize: '0.88rem', color: applyStep >= 3 ? 'var(--navy-primary)' : 'var(--text-muted)', fontWeight: applyStep === 3 ? 600 : 400 }}>
-                  Injetando currículo estruturado e respostas do candidato no ATS
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{
-                  width: '26px',
-                  height: '26px',
-                  borderRadius: '50%',
-                  background: applyStep === 5 ? 'var(--green-success)' : (applyStep === 4 ? 'var(--navy-primary)' : 'var(--bg-subtle)'),
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: applyStep >= 4 ? '#FFFFFF' : 'var(--text-muted)',
-                  fontSize: '0.78rem',
-                  fontWeight: 700
-                }}>
-                  {applyStep === 5 ? <Check size={14} /> : (applyStep === 4 ? <Loader2 size={14} className="animate-spin-slow" /> : '4')}
-                </div>
-                <div style={{ fontSize: '0.88rem', color: applyStep >= 4 ? 'var(--navy-primary)' : 'var(--text-muted)', fontWeight: applyStep === 4 ? 600 : 400 }}>
-                  {applyStep === 5 ? 'Candidatura submetida e comprovante registrado' : 'Preenchendo e submetendo formulário na aba oficial da empresa'}
-                </div>
-              </div>
+              )}
             </div>
 
-            {/* Bloco de Aguardo Ativo — sem botão manual */}
-            {applyStep === 4 && (
-              <div style={{
-                background: 'var(--navy-subtle)',
-                border: '1px solid #BFDBFE',
-                borderRadius: '8px',
-                padding: '18px 16px',
-                marginTop: '14px',
-                textAlign: 'center'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', color: 'var(--navy-primary)', fontWeight: 700, fontSize: '0.92rem' }}>
-                  <Loader2 size={17} className="animate-spin-slow" color="var(--blue-accent)" />
-                  <span>IA preenchendo e submetendo o formulário...</span>
-                </div>
-                <div style={{ fontSize: '0.81rem', color: 'var(--text-body)', marginTop: '8px', lineHeight: 1.55 }}>
-                  A extensão está preenchendo todos os campos e questionários de <strong>{selectedJobForApply.company}</strong> automaticamente. O comprovante será exibido aqui assim que a submissão for confirmada.
-                </div>
-                <div style={{
-                  marginTop: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  fontSize: '0.78rem',
-                  color: 'var(--text-muted)'
-                }}>
-                  <span style={{
-                    display: 'inline-block',
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    background: 'var(--blue-accent)',
-                    animation: 'pulse 1.4s ease-in-out infinite'
-                  }} />
-                  <span>Aguardando confirmação automática da aba oficial</span>
-                </div>
-              </div>
-            )}
-
-            {/* Resultado Final (Sucesso) */}
-            {applyStep === 5 && applyResult && (
+            {/* Resultado Final */}
+            {applyResult && applyResult.success && (
               <div style={{
                 background: '#ECFDF5',
                 border: '1px solid #A7F3D0',
@@ -2517,26 +2329,8 @@ export default function HomePage() {
                   <span>{applyResult.message}</span>
                 </div>
                 <div style={{ fontSize: '0.82rem', color: 'var(--text-body)', marginTop: '4px' }}>
-                  Protocolo VagasZap: <strong>{applyResult.confirmationId}</strong> • {applyResult.atsType || 'Candidatura Direta Confirmada'}
+                  Protocolo VagasZap: <strong>IA_AUTO</strong> • Enviado diretamente para a API do ATS.
                 </div>
-
-                {applyResult.coverLetter && (
-                  <div style={{
-                    marginTop: '12px',
-                    fontSize: '0.8rem',
-                    color: 'var(--text-body)',
-                    background: '#FFFFFF',
-                    border: '1px solid var(--border-light)',
-                    padding: '10px 12px',
-                    borderRadius: '6px',
-                    lineHeight: 1.5
-                  }}>
-                    <strong style={{ color: 'var(--navy-primary)' }}>Carta de Apresentação Direcionada:</strong>
-                    <div style={{ marginTop: '4px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                      "{applyResult.coverLetter}"
-                    </div>
-                  </div>
-                )}
 
                 <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
                   <a
@@ -2556,6 +2350,33 @@ export default function HomePage() {
                     style={{ flex: 1, padding: '9px 12px', fontSize: '0.84rem' }}
                   >
                     Concluir
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {applyResult && !applyResult.success && (
+              <div style={{
+                background: '#FEF2F2',
+                border: '1px solid #FECACA',
+                borderRadius: '8px',
+                padding: '18px',
+                marginTop: '14px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#991B1B', fontWeight: 800, fontSize: '1rem' }}>
+                  <X size={18} />
+                  <span>Falha ao enviar candidatura</span>
+                </div>
+                <div style={{ fontSize: '0.82rem', color: '#991B1B', marginTop: '4px' }}>
+                  {applyResult.error}
+                </div>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+                  <button
+                    onClick={() => setSelectedJobForApply(null)}
+                    className="btn-outline"
+                    style={{ flex: 1, padding: '9px 12px', fontSize: '0.84rem' }}
+                  >
+                    Fechar
                   </button>
                 </div>
               </div>

@@ -3,6 +3,12 @@ import fs from 'fs';
 import path from 'path';
 import { execFile } from 'child_process';
 import util from 'util';
+import { createClient } from '@supabase/supabase-js';
+
+// Initialize Supabase Client
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const execFileAsync = util.promisify(execFile);
 
@@ -38,6 +44,25 @@ export async function POST(request: Request) {
       if (!result.success || !result.profile) {
         throw new Error(result.error || 'Falha ao processar o currículo.');
       }
+
+      // Upload to Supabase Storage
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}${safeExt}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('resumes')
+        .upload(fileName, buffer, {
+          contentType: file.type,
+          upsert: true
+        });
+
+      let resumeUrl = '';
+      if (!uploadError && uploadData) {
+        const { data: publicUrlData } = supabase.storage.from('resumes').getPublicUrl(fileName);
+        resumeUrl = publicUrlData.publicUrl;
+      } else {
+        console.warn("Could not upload resume to Supabase:", uploadError);
+      }
+
+      result.profile.resume_url = resumeUrl; // Append to profile
 
       return NextResponse.json({
         success: true,

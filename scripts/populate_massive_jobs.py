@@ -47,7 +47,7 @@ def generate_summary(title, company, category, desc):
     if category == "tech":
         return f"Excelente oportunidade para atuar como {title} na equipe de {company}. Posição 100% remota com foco em desenvolvimento, boas práticas de engenharia e projetos de escala global."
     else:
-        return f"Oportunidade internacional de {title} junto à empresa {company}. Atuação 100% remota focada em excelência de atendimento, processos operacionais e suporte contínuo ao cliente em inglês."
+        return f"Oportunidade 100% remota de {title} na {company}. Atuação focada em excelência, processos e crescimento contínuo num ambiente de escala global."
 
 def fetch_greenhouse_jobs(board):
     """Coleta vagas oficiais via API pública do Greenhouse (sem intermediários)."""
@@ -81,18 +81,36 @@ def is_blocked_url(url):
 def classify_gh_job(job):
     """Classifica uma vaga ATS em tech/operations com base no título."""
     title = (job.get("title") or "").lower()
-    tech_kw = ["engineer", "developer", "qa", "test", "automation", "python",
-               "full-stack", "backend", "frontend", "infrastructure", "devops",
-               "ai", "machine learning", "data", "software", "architect", "security",
-               "sre", "platform", "cloud"]
-    ops_kw = ["support", "customer", "success", "care", "operations", "specialist",
-              "coordinator", "assistant", "intake", "client", "analyst", "onboarding",
-              "compliance", "administrative", "associate"]
-    if any(k in title for k in tech_kw):
+    
+    if any(k in title for k in ["ai", "machine learning", "prompt", "llm", "nlp", "automation", "n8n", "zapier", "artificial intelligence", "agentes"]):
+        return "ai"
+    if any(k in title for k in ["data", "dados", "bi", "business intelligence", "analytics", "scientist", "cientista"]):
+        return "data"
+    if any(k in title for k in ["design", "ux", "ui", "product designer", "arte", "criativo", "creative", "research"]):
+        return "design"
+    if any(k in title for k in ["marketing", "growth", "seo", "copywriter", "social media", "performance", "tráfego", "content", "conteúdo"]):
+        return "marketing"
+    if any(k in title for k in ["sales", "venda", "sdr", "bdr", "account executive", "customer success", "cs", "atendimento", "support", "account", "business development"]):
+        return "sales"
+    if any(k in title for k in ["hr", "rh", "recruiter", "recrutamento", "pessoas", "people", "talent", "treinamento", "culture"]):
+        return "hr"
+    if any(k in title for k in ["finance", "financeiro", "legal", "jurídico", "admin", "controller", "advogado", "counsel", "contábil", "accounting", "operations", "compliance"]):
+        return "finance"
+    if any(k in title for k in ["engineer", "developer", "qa", "test", "python", "full-stack", "backend", "frontend", "infrastructure", "devops", "software", "architect", "security", "sre", "platform", "cloud"]):
         return "tech"
-    if any(k in title for k in ops_kw):
-        return "operations"
-    return "tech"
+
+    return "operations"
+
+from datetime import datetime, timezone
+
+def parse_date_to_ts(date_str, fallback):
+    if not date_str: return fallback
+    if isinstance(date_str, (int, float)): return int(date_str)
+    try:
+        dt = datetime.fromisoformat(str(date_str).replace("Z", "+00:00"))
+        return int(dt.timestamp())
+    except Exception:
+        return fallback
 
 def process_single_job(j, category, now):
     # Greenhouse: absolute_url | Ashby: applyUrl | Fallback: id
@@ -105,14 +123,15 @@ def process_single_job(j, category, now):
     company = (company_loc.get('name') if isinstance(company_loc, dict) else company_loc) or j.get('company_name') or 'Global Company'
     loc = (company_loc.get('name') if isinstance(company_loc, dict) else company_loc) or 'Worldwide (100% Remoto)'
     desc = clean_html(j.get('content') or j.get('description') or '')
-    pub_ts = j.get('updated_at') or now
+    pub_ts = parse_date_to_ts(j.get('updated_at') or j.get('publishedAt') or j.get('first_published'), now)
 
     summary = generate_summary(title, company, category, desc)
 
-    if category == "tech":
-        tags = ["Tech & IA", "Greenhouse Oficial", "Remoto Worldwide"]
-    else:
-        tags = ["Operações", "Greenhouse Oficial", "Remoto Worldwide"]
+    cat_display = {
+        "ai": "IA", "data": "Dados", "design": "Design", "marketing": "Marketing",
+        "sales": "Vendas", "hr": "RH", "finance": "Financeiro", "tech": "Tech", "operations": "Operações"
+    }
+    tags = [cat_display.get(category, category.title()), "Greenhouse Oficial", "Remoto Worldwide"]
 
     return {
         "id": jid,
@@ -138,8 +157,7 @@ def main():
     gh_boards = ["canonical", "gitlab", "cloudflare", "elastic", "remotecom", "brex", "datadog"]
     ashby_orgs = ["perplexity", "elevenlabs", "cursor", "replit", "synthesia"]
 
-    all_raw_tech = []
-    all_raw_ops = []
+    all_raw = {k: [] for k in ["ai", "data", "design", "marketing", "sales", "hr", "finance", "tech", "operations"]}
 
     print(f"Buscando vagas de {len(gh_boards)} boards Greenhouse e {len(ashby_orgs)} orgs Ashby...")
 
@@ -148,40 +166,36 @@ def main():
         for f in as_completed(futures_gh):
             for j in f.result():
                 cat = classify_gh_job(j)
-                (all_raw_tech if cat == "tech" else all_raw_ops).append(j)
+                all_raw[cat].append(j)
 
         futures_ashby = {executor.submit(fetch_ashby_jobs, o): o for o in ashby_orgs}
         for f in as_completed(futures_ashby):
             for j in f.result():
                 cat = classify_gh_job(j)
-                (all_raw_tech if cat == "tech" else all_raw_ops).append(j)
+                all_raw[cat].append(j)
 
-    print(f"Total bruto capturado: {len(all_raw_tech)} Tech, {len(all_raw_ops)} Ops")
+    for cat, jobs_list in all_raw.items():
+        print(f"Total bruto capturado {cat.upper()}: {len(jobs_list)}")
 
     seen_guids = set()
-    unique_tech = []
-    for j in all_raw_tech:
-        k = j.get('absolute_url') or j.get('applyUrl') or j.get('id')
-        if k and k not in seen_guids and not is_blocked_url(k):
-            seen_guids.add(k)
-            unique_tech.append(j)
+    unique_all = {k: [] for k in all_raw.keys()}
+    
+    for cat, jobs_list in all_raw.items():
+        for j in jobs_list:
+            k = j.get('absolute_url') or j.get('applyUrl') or j.get('id')
+            if k and k not in seen_guids and not is_blocked_url(k):
+                seen_guids.add(k)
+                unique_all[cat].append(j)
 
-    unique_ops = []
-    for j in all_raw_ops:
-        k = j.get('absolute_url') or j.get('applyUrl') or j.get('id')
-        if k and k not in seen_guids and not is_blocked_url(k):
-            seen_guids.add(k)
-            unique_ops.append(j)
+    tasks = []
+    # Balancear pegando até 60 vagas de cada categoria para dar ~500 vagas
+    for cat, jobs_list in unique_all.items():
+        tasks.extend([(j, cat) for j in jobs_list[:60]])
 
-    print(f"Vagas únicas selecionadas: {len(unique_tech)} Tech, {len(unique_ops)} Ops (Total: {len(unique_tech) + len(unique_ops)})")
-
-    target_tech = unique_tech[:100]
-    target_ops = unique_ops[:100]
+    print(f"Vagas únicas selecionadas para processamento: {len(tasks)}")
 
     processed_jobs = []
     print("Gerando resumos inteligentes e estruturando registros em paralelo (12 threads)...")
-
-    tasks = [(j, "tech") for j in target_tech] + [(j, "operations") for j in target_ops]
 
     with ThreadPoolExecutor(max_workers=12) as executor:
         futures = [executor.submit(process_single_job, j, cat, now) for j, cat in tasks]
