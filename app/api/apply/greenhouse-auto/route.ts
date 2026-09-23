@@ -44,7 +44,7 @@ export async function POST(req: Request) {
     }
 
     const result = await applyRes.json();
-    return NextResponse.json({ success: true, message: result.message || 'Candidatura enviada via robô com sucesso!' });
+    return NextResponse.json({ success: true, message: result.message || 'Candidatura enviada via robô com sucesso!', proof_url: result.proof_url });
 
   } catch (error: any) {
     console.error('Erro na rota auto-apply VPS:', error);

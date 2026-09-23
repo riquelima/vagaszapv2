@@ -4,12 +4,17 @@ const cors = require('cors');
 const axios = require('axios');
 const { chromium } = require('playwright');
 const fs = require('fs');
+const path = require('path');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 const upload = multer({ dest: 'uploads/' });
+
+// Expor diretório de vídeos publicamente
+if (!fs.existsSync('proofs')) fs.mkdirSync('proofs');
+app.use('/proofs', express.static(path.join(__dirname, 'proofs')));
 
 async function generateAnswersWithMinimax(apiKey, profile, customQuestions) {
   const prompt = `Você é um candidato aplicando para uma vaga. Com base no currículo abaixo, preencha os campos do formulário. 
@@ -58,9 +63,16 @@ app.post('/apply', upload.single('resume'), async (req, res) => {
   try { profile = JSON.parse(profileStr); } catch(e) { profile = {}; }
 
   let browser;
+  let videoPath = null;
+  let videoFileName = null;
+  
   try {
     browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-    const context = await browser.newContext({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' });
+    const context = await browser.newContext({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        recordVideo: { dir: 'proofs/', size: { width: 1280, height: 720 } }
+    });
+    
     const page = await context.newPage();
     
     console.log(`Navigating to ${job_url}...`);
@@ -171,7 +183,15 @@ app.post('/apply', upload.single('resume'), async (req, res) => {
         console.log('Botão de submit não encontrado.');
     }
 
-    res.json({ success: true, message: 'Candidatura enviada via Headless Browser!' });
+    // Fechar página salva o vídeo
+    videoPath = await page.video().path();
+    videoFileName = path.basename(videoPath);
+    await page.close();
+    await context.close();
+
+    const proof_url = `http://185.173.110.54:4000/proofs/${videoFileName}`;
+
+    res.json({ success: true, message: 'Candidatura enviada via Headless Browser!', proof_url });
 
   } catch (err) {
     console.error('Erro na automação:', err);

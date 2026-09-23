@@ -2332,6 +2332,23 @@ export default function HomePage() {
                   Protocolo VagasZap: <strong>IA_AUTO</strong> • Enviado diretamente para a API do ATS.
                 </div>
 
+                {applyResult.proof_url && (
+                  <div style={{ marginTop: '16px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #A7F3D0' }}>
+                    <div style={{ background: '#059669', color: '#fff', fontSize: '0.75rem', fontWeight: 700, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                       <span style={{ width: 8, height: 8, background: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'pulse 1.5s infinite' }}></span>
+                       GRAVAÇÃO DO ROBÔ (VPS)
+                    </div>
+                    <video 
+                      src={applyResult.proof_url} 
+                      autoPlay 
+                      loop 
+                      muted 
+                      controls 
+                      style={{ width: '100%', display: 'block', maxHeight: '320px', objectFit: 'cover' }} 
+                    />
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
                   <a
                     href={selectedJobForApply.applicationLink}
