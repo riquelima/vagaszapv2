@@ -591,6 +591,9 @@ export default function HomePage() {
   // Auto-Apply Modal State
   const [selectedJobForApply, setSelectedJobForApply] = useState<JobItem | null>(null);
   const [applyStep, setApplyStep] = useState<number>(0); // 0: Init, 1: Mapeando formulário, 2: IA gerando carta, 3: Injetando dados, 4: Aguardando envio, 5: Concluído
+  const [liveStreamFrame, setLiveStreamFrame] = useState<string | null>(null);
+  const [liveStreamStatus, setLiveStreamStatus] = useState<string>('');
+  
   const [applyResult, setApplyResult] = useState<any>(null);
   const [appliedJobsHistory, setAppliedJobsHistory] = useState<{ [jobId: string]: any }>({});
   const [showUploadAlert, setShowUploadAlert] = useState(false);
@@ -850,6 +853,28 @@ export default function HomePage() {
     setSelectedJobForApply(job);
     setApplyStep(1); // 1 = loading
     setApplyResult(null);
+    setLiveStreamFrame(null);
+    setLiveStreamStatus('Conectando ao robô...');
+
+    const applyId = Math.random().toString(36).substring(7) + Date.now().toString(36);
+
+    const ws = new WebSocket('ws://185.173.110.54:4001');
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: 'subscribe', applyId }));
+    };
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'frame') {
+          setLiveStreamFrame(msg.data);
+          setLiveStreamStatus('Robô trabalhando...');
+        } else if (msg.type === 'status') {
+          setLiveStreamStatus(msg.message);
+        } else if (msg.type === 'done') {
+          ws.close();
+        }
+      } catch(e){}
+    };
 
     try {
       const res = await fetch('/api/apply/greenhouse-auto', {
@@ -857,7 +882,8 @@ export default function HomePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           job_url: job.applicationLink,
-          profile: candidateProfile
+          profile: candidateProfile,
+          applyId
         })
       });
       const data = await res.json();
@@ -2304,13 +2330,20 @@ export default function HomePage() {
                   padding: '18px 16px',
                   textAlign: 'center'
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', color: 'var(--navy-primary)', fontWeight: 700, fontSize: '0.92rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', color: 'var(--navy-primary)', fontWeight: 700, fontSize: '0.92rem', marginBottom: liveStreamFrame ? '12px' : '0' }}>
                     <Loader2 size={17} className="animate-spin-slow" color="var(--blue-accent)" />
-                    <span>Conectando à API Oficial e deduzindo respostas...</span>
+                    <span>{liveStreamStatus || 'Conectando à API Oficial e deduzindo respostas...'}</span>
                   </div>
-                  <div style={{ fontSize: '0.81rem', color: 'var(--text-body)', marginTop: '8px', lineHeight: 1.55 }}>
-                    A Minimax está analisando seu currículo em tempo real e preenchendo todos os campos personalizados exigidos pela <strong>{selectedJobForApply.company}</strong>.
-                  </div>
+                  
+                  {liveStreamFrame ? (
+                     <div style={{ borderRadius: '6px', overflow: 'hidden', border: '2px solid var(--blue-accent)', background: '#000', display: 'flex', justifyContent: 'center' }}>
+                       <img src={`data:image/jpeg;base64,${liveStreamFrame}`} alt="Live Stream" style={{ width: '100%', maxHeight: '250px', objectFit: 'contain' }} />
+                     </div>
+                  ) : (
+                    <div style={{ fontSize: '0.81rem', color: 'var(--text-body)', marginTop: '8px', lineHeight: 1.55 }}>
+                      A Minimax está analisando seu currículo em tempo real e preenchendo todos os campos personalizados exigidos pela <strong>{selectedJobForApply.company}</strong>.
+                    </div>
+                  )}
                 </div>
               )}
             </div>

@@ -5,6 +5,7 @@ const axios = require('axios');
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
+const { WebSocketServer } = require('ws');
 
 const app = express();
 app.use(cors());
@@ -15,6 +16,32 @@ const upload = multer({ dest: 'uploads/' });
 // Expor diretório de vídeos publicamente
 if (!fs.existsSync('proofs')) fs.mkdirSync('proofs');
 app.use('/proofs', express.static(path.join(__dirname, 'proofs')));
+
+// WebSocket Server para o Livestream
+const wss = new WebSocketServer({ port: 4001 });
+const activeSockets = new Map(); // applyId -> ws
+
+wss.on('connection', (ws) => {
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message);
+      if (data.type === 'subscribe' && data.applyId) {
+        activeSockets.set(data.applyId, ws);
+        ws.send(JSON.stringify({ type: 'status', message: 'Conectado ao canal de vídeo do robô!' }));
+      }
+    } catch (e) {
+      console.error('Erro na mensagem WS:', e);
+    }
+  });
+
+  ws.on('close', () => {
+    for (let [id, socket] of activeSockets.entries()) {
+      if (socket === ws) {
+        activeSockets.delete(id);
+      }
+    }
+  });
+});
 
 async function generateAnswersWithMinimax(apiKey, profile, customQuestions) {
   const prompt = `Você é um candidato aplicando para uma vaga. Com base no currículo abaixo, preencha os campos do formulário. 
@@ -54,7 +81,7 @@ ${JSON.stringify(customQuestions, null, 2)}`;
 }
 
 app.post('/apply', upload.single('resume'), async (req, res) => {
-  const { job_url, profile: profileStr, minimax_key } = req.body;
+  const { job_url, profile: profileStr, minimax_key, applyId } = req.body;
   if (!job_url || !profileStr || !req.file || !minimax_key) {
     return res.status(400).json({ error: 'Faltam parâmetros.' });
   }
@@ -74,6 +101,24 @@ app.post('/apply', upload.single('resume'), async (req, res) => {
     });
     
     const page = await context.newPage();
+
+    let client;
+    if (applyId) {
+      try {
+        client = await page.context().newCDPSession(page);
+        await client.send('Page.startScreencast', { format: 'jpeg', quality: 50, everyNthFrame: 1 });
+        
+        client.on('Page.screencastFrame', (event) => {
+          const ws = activeSockets.get(applyId);
+          if (ws && ws.readyState === 1) { // 1 = OPEN
+            ws.send(JSON.stringify({ type: 'frame', data: event.data }));
+          }
+          client.send('Page.screencastFrameAck', { sessionId: event.sessionId }).catch(()=>null);
+        });
+      } catch (cdpErr) {
+        console.error('Erro ao iniciar Screencast CDP:', cdpErr);
+      }
+    }
     
     console.log(`Navigating to ${job_url}...`);
     await page.goto(job_url, { waitUntil: 'networkidle' });
@@ -186,8 +231,23 @@ app.post('/apply', upload.single('resume'), async (req, res) => {
     // Fechar página salva o vídeo
     videoPath = await page.video().path();
     videoFileName = path.basename(videoPath);
+    
+    // Parar stream
+    if (client) {
+      await client.send('Page.stopScreencast').catch(()=>null);
+      client.removeAllListeners('Page.screencastFrame');
+    }
+    
     await page.close();
     await context.close();
+
+    // Avisa o websocket que terminou
+    if (applyId) {
+      const ws = activeSockets.get(applyId);
+      if (ws && ws.readyState === 1) {
+         ws.send(JSON.stringify({ type: 'done', message: 'Processo concluído.' }));
+      }
+    }
 
     const proof_url = `http://185.173.110.54:4000/proofs/${videoFileName}`;
 
@@ -202,4 +262,5 @@ app.post('/apply', upload.single('resume'), async (req, res) => {
   }
 });
 
-app.listen(4000, () => console.log('VPS Worker running on port 4000...'));
+console.log('VPS Worker running on port 4000 (API) and 4001 (WS)...');
+app.listen(4000, () => console.log('API running on port 4000...'));

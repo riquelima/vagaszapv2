@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
   try {
-    const { job_url, profile } = await req.json();
+    const { job_url, profile, applyId } = await req.json();
 
     if (!job_url || !profile || !profile.resume_url) {
       return NextResponse.json({ success: false, error: 'Faltam parâmetros ou o currículo não foi anexado.' }, { status: 400 });
@@ -18,6 +18,7 @@ export async function POST(req: Request) {
     // Monta o FormData para enviar para o nosso Worker VPS
     const formData = new FormData();
     formData.append('job_url', job_url);
+    if (applyId) formData.append('applyId', applyId);
     formData.append('profile', JSON.stringify(profile));
     formData.append('minimax_key', process.env.MINIMAX_API_KEY || '');
     formData.append('resume', resumeBlob, 'curriculo.pdf');
