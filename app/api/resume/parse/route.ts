@@ -17,46 +17,105 @@ function writableTmpDir(): string {
   const dir = path.join(base, 'vagaszap-resume');
   try {
     fs.mkdirSync(dir, { recursive: true });
-  } catch (e: any) {
+  } catch {
     // Last-resort fallback to /tmp itself (always writable on Vercel).
     return '/tmp';
   }
   return dir;
 }
 
+function getSupabase() {
+  // Prefer the service role key (server-only) to download files regardless of
+  // bucket RLS. Fall back to the anon key if not configured.
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const serviceKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    '';
+  if (!url || !serviceKey) return null;
+  return createClient(url, serviceKey);
+}
+
 export async function POST(request: Request) {
   try {
-    // Initialize Supabase Client inside the handler so build doesn't fail on missing env vars
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-    let supabase = null;
-    if (supabaseUrl && supabaseKey) {
-      supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = getSupabase();
+
+    // Accept TWO input shapes:
+    //   1. Legacy FormData("file"): kept for backwards compatibility / local dev.
+    //      Limited to 4.5 MB by Vercel's request-body limit.
+    //   2. JSON { storagePath, fileName }: the file is already in Supabase
+    //      Storage (uploaded directly by the client), bypassing the Vercel
+    //      limit. Recommended for production. Allows files up to the bucket's
+    //      configured ceiling (default 50 MB).
+    const contentType = request.headers.get('content-type') || '';
+    let buffer: Buffer;
+    let originalFileName: string;
+    let storagePath: string | null = null;
+
+    if (contentType.includes('application/json')) {
+      const body = await request.json().catch(() => ({}));
+      const incomingPath = (body.storagePath || '').toString().trim();
+      const incomingName = (body.fileName || '').toString().trim();
+      if (!incomingPath) {
+        return NextResponse.json(
+          { success: false, error: 'storagePath é obrigatório.' },
+          { status: 400 },
+        );
+      }
+      // Path-traversal guard: only allow simple filenames (no slashes, no '..').
+      if (!/^[A-Za-z0-9._-]+$/.test(incomingPath)) {
+        return NextResponse.json(
+          { success: false, error: 'storagePath inválido.' },
+          { status: 400 },
+        );
+      }
+      if (!supabase) {
+        return NextResponse.json(
+          { success: false, error: 'Supabase não configurado no servidor.' },
+          { status: 500 },
+        );
+      }
+      const { data: dl, error: dlErr } = await supabase.storage
+        .from('resumes')
+        .download(incomingPath);
+      if (dlErr || !dl) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Falha ao baixar do Storage: ${dlErr?.message || 'arquivo ausente'}`,
+          },
+          { status: 404 },
+        );
+      }
+      const ab = await dl.arrayBuffer();
+      buffer = Buffer.from(ab);
+      storagePath = incomingPath;
+      originalFileName = incomingName || incomingPath;
+    } else {
+      // Legacy multipart upload path.
+      const formData = await request.formData();
+      const file = formData.get('file') as File | null;
+      if (!file) {
+        return NextResponse.json(
+          { success: false, error: 'Nenhum arquivo enviado.' },
+          { status: 400 },
+        );
+      }
+      buffer = Buffer.from(await file.arrayBuffer());
+      originalFileName = file.name || 'upload';
     }
 
-    const formData = await request.formData();
-    const file = formData.get('file') as File | null;
-
-    if (!file) {
-      return NextResponse.json({ success: false, error: 'Nenhum arquivo enviado.' }, { status: 400 });
-    }
-
-    const buffer = Buffer.from(await file.arrayBuffer());
-
-    const safeExt = file.name.endsWith('.docx')
+    const safeExt = originalFileName.endsWith('.docx')
       ? '.docx'
-      : file.name.endsWith('.doc')
+      : originalFileName.endsWith('.doc')
         ? '.doc'
-        : file.name.endsWith('.png')
+        : originalFileName.endsWith('.png')
           ? '.png'
-          : file.name.endsWith('.jpg') || file.name.endsWith('.jpeg')
+          : originalFileName.endsWith('.jpg') || originalFileName.endsWith('.jpeg')
             ? '.jpg'
             : '.pdf';
 
-    // Always write the uploaded buffer to a writable tmp dir (os.tmpdir()
-    // resolves to /tmp on Vercel). NEVER use path.join(process.cwd(), 'tmp')
-    // — that directory is read-only at runtime in serverless, throwing:
-    //   ENOENT: no such file or directory, mkdir '/var/task/tmp'
+    // Always write to a writable tmp dir (os.tmpdir() resolves to /tmp on Vercel).
     const scriptPath = path.join(process.cwd(), 'scripts', 'process_resume.py');
     const tmpDir = writableTmpDir();
     const tmpPath = path.join(
@@ -76,7 +135,7 @@ export async function POST(request: Request) {
     } finally {
       try {
         fs.unlinkSync(tmpPath);
-      } catch (e) {
+      } catch {
         /* best-effort cleanup */
       }
     }
@@ -86,35 +145,43 @@ export async function POST(request: Request) {
       throw new Error(result.error || 'Falha ao processar o currículo.');
     }
 
-    // Upload to Supabase Storage
-    const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}${safeExt}`;
+    // Resolve the public URL of the file we already have in Storage
+    // (either the client uploaded it directly, or the legacy path uploaded
+    // it below). Re-uploading from buffer is idempotent thanks to upsert.
     let resumeUrl = '';
+    const finalStorageName = storagePath
+      ? storagePath
+      : `${Date.now()}_${Math.random().toString(36).substring(7)}${safeExt}`;
 
     if (supabase) {
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('resumes')
-        .upload(fileName, buffer, {
-          contentType: file.type,
-          upsert: true,
-        });
-
-      if (!uploadError && uploadData) {
-        const { data: publicUrlData } = supabase.storage.from('resumes').getPublicUrl(fileName);
-        resumeUrl = publicUrlData.publicUrl;
-      } else {
-        console.warn("Could not upload resume to Supabase:", uploadError);
+      // If the legacy path didn't pre-upload, do it now so the profile carries
+      // a resume_url. The storage path for the legacy path is also derived.
+      if (!storagePath) {
+        const { error: uploadError } = await supabase.storage
+          .from('resumes')
+          .upload(finalStorageName, buffer, {
+            contentType: 'application/octet-stream',
+            upsert: true,
+          });
+        if (uploadError) {
+          console.warn('Legacy resume upload failed:', uploadError);
+        }
       }
+      const { data: publicUrlData } = supabase.storage
+        .from('resumes')
+        .getPublicUrl(finalStorageName);
+      resumeUrl = publicUrlData.publicUrl;
     } else {
-      console.warn("Supabase client not initialized, skipping resume upload.");
+      console.warn('Supabase client not initialized, skipping resume URL.');
     }
 
-    result.profile.resume_url = resumeUrl; // Append to profile
+    result.profile.resume_url = resumeUrl;
 
     return NextResponse.json({
       success: true,
       profile: result.profile,
-      fileName: file.name,
-      fileSize: `${(file.size / 1024).toFixed(1)} KB`,
+      fileName: originalFileName,
+      fileSize: `${(buffer.length / 1024).toFixed(1)} KB`,
     });
   } catch (error: any) {
     console.error('Erro na rota /api/resume/parse:', error);
@@ -124,4 +191,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

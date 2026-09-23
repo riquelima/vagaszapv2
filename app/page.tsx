@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
+import { supabase } from '@/lib/supabase';
 import {
   Upload,
   FileText,
@@ -838,13 +839,37 @@ export default function HomePage() {
     setResumeError(null);
     setShowUploadAlert(false);
 
-    const formData = new FormData();
-    formData.append('file', file);
+    // ── Step 1: upload directly to Supabase Storage (bypasses Vercel's 4.5 MB
+    // request-body limit, allowing files up to the bucket's 50 MB ceiling).
+    const safeExt = file.name.endsWith('.docx')
+      ? '.docx'
+      : file.name.endsWith('.doc')
+        ? '.doc'
+        : file.name.endsWith('.png')
+          ? '.png'
+          : file.name.endsWith('.jpg') || file.name.endsWith('.jpeg')
+            ? '.jpg'
+            : '.pdf';
+    const storagePath = `${Date.now()}_${Math.random().toString(36).substring(7)}${safeExt}`;
 
     try {
+      const { error: uploadError } = await supabase.storage
+        .from('resumes')
+        .upload(storagePath, file, {
+          contentType: file.type || 'application/octet-stream',
+          upsert: true,
+        });
+
+      if (uploadError) {
+        throw new Error(`Falha no upload do Storage: ${uploadError.message}`);
+      }
+
+      // ── Step 2: ask the server to parse the (already-uploaded) file.
+      // Body is just JSON metadata, well under 4.5 MB.
       const res = await fetch('/api/resume/parse', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storagePath, fileName: file.name }),
       });
       const data = await res.json();
       if (data.success && data.profile) {
