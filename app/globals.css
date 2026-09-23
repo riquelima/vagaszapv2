@@ -1188,3 +1188,9 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
   /* garante que a fonte também caiba no mobile e não corte */
   font-size: 14px;
 }
+
+/* spinner for Auto-Apply dashboard */
+@keyframes vz-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

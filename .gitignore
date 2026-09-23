@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# vagas_compat_automation (local Python bot artifacts — keep code, ignore runtime data)
+vagas_compat_automation/__pycache__/
+vagas_compat_automation/.env
+vagas_compat_automation/applied_jobs.json
+vagas_compat_automation/applied_jobs.old.json
+vagas_compat_automation/match_results.json
+vagas_compat_automation/screenshots/
+vagas_compat_automation/*.log

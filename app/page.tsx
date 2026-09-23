@@ -93,6 +93,40 @@ interface CandidateProfile {
   resume_url?: string;
 }
 
+// ─── Auto-Apply Application Tracker (consumed from /api/applications) ─────────
+interface ApplicationEvidence {
+  thank_you_url?: string | null;
+  post_submit_url?: string | null;
+  post_submit_title?: string | null;
+  screenshot_path?: string | null;
+  http_status?: number | null;
+  response_snippet?: string | null;
+  confirmation_keywords_found?: string[];
+}
+
+interface ApplicationRecord {
+  id?: string;
+  job_id?: string;
+  title?: string;
+  company?: string;
+  url?: string;
+  score?: number;
+  status?:
+    | 'submitted'
+    | 'failed'
+    | 'needs_manual_review'
+    | 'dry_run'
+    | 'pending'
+    | string;
+  started_at?: string;
+  finished_at?: string;
+  applied_at?: string;
+  duration_s?: number | null;
+  evidence?: ApplicationEvidence;
+  errors?: string[];
+  live_submit?: boolean;
+}
+
 // ─── Automation Compatibility Score ─────────────────────────────────────────
 interface AutomationScoreResult {
   score: number;
@@ -521,6 +555,11 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortByMatch, setSortByMatch] = useState(false);
   const [jobs, setJobs] = useState<JobItem[]>([]);
+  const [applications, setApplications] = useState<ApplicationRecord[]>([]);
+  const [applicationsSummary, setApplicationsSummary] = useState<Record<string, number>>({});
+  const [applicationsLoading, setApplicationsLoading] = useState(false);
+  const [showApplicationsPanel, setShowApplicationsPanel] = useState(false);
+  const [applicationsStatusFilter, setApplicationsStatusFilter] = useState<string>('all');
   const [isLoadingJobs, setIsLoadingJobs] = useState(true);
 
   // Currículo State
@@ -710,6 +749,34 @@ export default function HomePage() {
     }
   };
 
+  // Fetch auto-apply applications from the local bot (vagas_compat_automation)
+  const fetchApplications = async (statusFilter: string = 'all') => {
+    setApplicationsLoading(true);
+    try {
+      const url =
+        statusFilter && statusFilter !== 'all'
+          ? `/api/applications?status=${encodeURIComponent(statusFilter)}&limit=200`
+          : `/api/applications?limit=200`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.success) {
+        setApplications(data.applications || []);
+        setApplicationsSummary(data.summary || {});
+      }
+    } catch (e) {
+      console.error('Erro ao buscar applications:', e);
+    } finally {
+      setApplicationsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showApplicationsPanel) {
+      fetchApplications(applicationsStatusFilter);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showApplicationsPanel, applicationsStatusFilter]);
+
   // Escuta término real da candidatura vindo da aba da empresa (extensão)
   useEffect(() => {
     const handleCompletionMsg = (event: MessageEvent) => {
@@ -888,7 +955,7 @@ export default function HomePage() {
       });
       const data = await res.json();
       if (data.success) {
-        setApplyResult({ success: true, message: data.message });
+        setApplyResult({ success: true, message: data.message, proof_url: data.proof_url });
         setAppliedJobsHistory(prev => ({
           ...prev,
           [job.id]: {
@@ -1510,6 +1577,208 @@ export default function HomePage() {
                 </article>
               )}
             </section>
+
+            {/* ─── Auto-Apply Applications Dashboard Toggle ─────────────────── */}
+            <div style={{ marginTop: '20px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => setShowApplicationsPanel((s) => !s)}
+                aria-expanded={showApplicationsPanel}
+                aria-controls="applications-panel"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '10px 16px',
+                  borderRadius: '10px',
+                  border: '1px solid var(--navy-primary)',
+                  background: showApplicationsPanel ? 'var(--navy-primary)' : '#FFFFFF',
+                  color: showApplicationsPanel ? '#FFFFFF' : 'var(--navy-primary)',
+                  fontWeight: 700,
+                  fontSize: '0.86rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <FileCheck2 size={16} strokeWidth={2.2} aria-hidden />
+                <span>
+                  {showApplicationsPanel ? 'Ocultar' : 'Ver'} painel de Auto-Apply
+                </span>
+                <span
+                  aria-hidden
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minWidth: '22px',
+                    height: '22px',
+                    borderRadius: '11px',
+                    padding: '0 6px',
+                    fontSize: '0.72rem',
+                    fontWeight: 800,
+                    background: showApplicationsPanel ? '#FFFFFF' : 'var(--navy-primary)',
+                    color: showApplicationsPanel ? 'var(--navy-primary)' : '#FFFFFF',
+                  }}
+                >
+                  {Object.values(applicationsSummary).reduce((a, b) => a + b, 0) || '—'}
+                </span>
+              </button>
+            </div>
+
+            {showApplicationsPanel && (
+              <section
+                id="applications-panel"
+                aria-label="Histórico de aplicações automáticas"
+                style={{
+                  marginTop: '16px',
+                  padding: '18px',
+                  borderRadius: '12px',
+                  border: '1px solid #E2E8F0',
+                  background: '#F8FAFC',
+                }}
+              >
+                <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
+                  <h3 style={{ margin: 0, fontSize: '1.02rem', color: 'var(--navy-primary)', fontWeight: 800 }}>
+                    Histórico de Auto-Apply (vagas_compat_automation)
+                  </h3>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {['all', 'submitted', 'needs_manual_review', 'failed', 'dry_run'].map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setApplicationsStatusFilter(s)}
+                        style={{
+                          padding: '6px 10px',
+                          borderRadius: '999px',
+                          border: '1px solid #CBD5E1',
+                          background: applicationsStatusFilter === s ? 'var(--navy-primary)' : '#FFFFFF',
+                          color: applicationsStatusFilter === s ? '#FFFFFF' : 'var(--navy-primary)',
+                          fontSize: '0.74rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {s} ({s === 'all' ? Object.values(applicationsSummary).reduce((a, b) => a + b, 0) : applicationsSummary[s] || 0})
+                      </button>
+                    ))}
+                  </div>
+                </header>
+
+                {applicationsLoading && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '20px', color: 'var(--text-muted)' }}>
+                    <RefreshCw size={16} aria-hidden style={{ animation: 'vz-spin 1s linear infinite' }} /> Carregando aplicações…
+                  </div>
+                )}
+
+                {!applicationsLoading && applications.length === 0 && (
+                  <div style={{ padding: '20px', color: 'var(--text-muted)', textAlign: 'center', fontSize: '0.9rem' }}>
+                    Nenhuma aplicação encontrada para esse filtro. Rode o bot
+                    (<code>python3 -m vagas_compat_automation.runner</code>) para popular.
+                  </div>
+                )}
+
+                {!applicationsLoading && applications.length > 0 && (
+                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {applications.map((app, idx) => {
+                      const status = app.status || 'unknown';
+                      const palette: Record<string, { bg: string; fg: string; border: string; label: string }> = {
+                        submitted: { bg: '#ECFDF5', fg: '#065F46', border: '#A7F3D0', label: '✅ Submetida' },
+                        needs_manual_review: { bg: '#FFFBEB', fg: '#92400E', border: '#FDE68A', label: '⚠️ Revisar' },
+                        failed: { bg: '#FEF2F2', fg: '#991B1B', border: '#FECACA', label: '❌ Falhou' },
+                        dry_run: { bg: '#EFF6FF', fg: '#1E40AF', border: '#BFDBFE', label: '�� Dry-run' },
+                        pending: { bg: '#F1F5F9', fg: '#475569', border: '#CBD5E1', label: '⏳ Pendente' },
+                        unknown: { bg: '#F1F5F9', fg: '#475569', border: '#CBD5E1', label: status },
+                      };
+                      const c = palette[status] || palette.unknown;
+                      const when = app.finished_at || app.started_at || app.applied_at || '';
+                      return (
+                        <li
+                          key={app.id || idx}
+                          style={{
+                            padding: '12px',
+                            borderRadius: '10px',
+                            border: `1px solid ${c.border}`,
+                            background: '#FFFFFF',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '6px',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+                            <div style={{ flex: 1, minWidth: 220 }}>
+                              <div style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--text-primary)' }}>
+                                {app.title || '—'} <span style={{ fontWeight: 500, color: 'var(--text-muted)' }}>@ {app.company || '—'}</span>
+                              </div>
+                              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                {when && <span>{when} </span>}
+                                {app.score != null && <span>• score {app.score}</span>}
+                                {app.duration_s != null && <span>• {app.duration_s}s</span>}
+                              </div>
+                            </div>
+                            <span
+                              style={{
+                                fontSize: '0.74rem',
+                                fontWeight: 700,
+                                padding: '4px 10px',
+                                borderRadius: '999px',
+                                background: c.bg,
+                                color: c.fg,
+                                border: `1px solid ${c.border}`,
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {c.label}
+                            </span>
+                          </div>
+
+                          {app.url && (
+                            <a
+                              href={app.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ fontSize: '0.78rem', color: 'var(--navy-primary)', textDecoration: 'none', wordBreak: 'break-all' }}
+                            >
+                              {app.url} ↗
+                            </a>
+                          )}
+
+                          {app.evidence && (app.evidence.thank_you_url || app.evidence.post_submit_url || (app.evidence.confirmation_keywords_found || []).length > 0) && (
+                            <div style={{ fontSize: '0.78rem', color: '#065F46', marginTop: '4px' }}>
+                              {app.evidence.thank_you_url && (
+                                <div>
+                                  Thank-you:{' '}
+                                  <a href={app.evidence.thank_you_url} target="_blank" rel="noopener noreferrer" style={{ color: '#065F46', textDecoration: 'underline' }}>
+                                    {app.evidence.thank_you_url}
+                                  </a>
+                                </div>
+                              )}
+                              {app.evidence.post_submit_url && app.evidence.post_submit_url !== app.evidence.thank_you_url && (
+                                <div style={{ color: 'var(--text-muted)' }}>
+                                  Post-submit: {app.evidence.post_submit_url}
+                                </div>
+                              )}
+                              {(app.evidence.confirmation_keywords_found || []).length > 0 && (
+                                <div style={{ marginTop: '2px' }}>
+                                  Keywords: {app.evidence.confirmation_keywords_found!.join(', ')}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {app.errors && app.errors.length > 0 && (
+                            <div style={{ fontSize: '0.78rem', color: '#991B1B', marginTop: '4px' }}>
+                              {app.errors.map((e, i) => (
+                                <div key={i}>• {e}</div>
+                              ))}
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
+            )}
 
             {/* Mobile-only helper text (orientação do scroll horizontal) */}
             <p className="vz-info-hint" aria-hidden>
