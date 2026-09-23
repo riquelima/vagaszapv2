@@ -27,14 +27,18 @@ function writableTmpDir(): string {
 function getSupabase() {
   // Server-only env vars (no NEXT_PUBLIC_ prefix). We accept the old
   // NEXT_PUBLIC_* names as a fallback for projects that haven't migrated yet.
+  // We also accept NEXT_SUPABASE_* (without _PUBLIC_) for Vercel projects
+  // that can't use the literal substring "PUBLIC" in env var names.
   const url =
     process.env.SUPABASE_URL ||
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.NEXT_SUPABASE_URL ||
     '';
   const serviceKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_SUPABASE_ANON_KEY ||
     '';
   if (!url || !serviceKey) return null;
   return createClient(url, serviceKey);

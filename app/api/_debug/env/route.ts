@@ -13,6 +13,8 @@ export async function GET() {
     'SUPABASE_SERVICE_ROLE_KEY',
     'NEXT_PUBLIC_SUPABASE_URL',
     'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+    'NEXT_SUPABASE_URL',
+    'NEXT_SUPABASE_ANON_KEY',
     'MINIMAX_API_KEY',
   ];
 
@@ -32,11 +34,13 @@ export async function GET() {
 
   const hasAnySupabase =
     presence.SUPABASE_URL ||
-    presence.NEXT_PUBLIC_SUPABASE_URL;
+    presence.NEXT_PUBLIC_SUPABASE_URL ||
+    presence.NEXT_SUPABASE_URL;
   const hasAnyKey =
     presence.SUPABASE_SERVICE_ROLE_KEY ||
     presence.SUPABASE_ANON_KEY ||
-    presence.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    presence.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    presence.NEXT_SUPABASE_ANON_KEY;
 
   return NextResponse.json({
     supabase_configured: hasAnySupabase && hasAnyKey,
