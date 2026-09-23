@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Guia VagasZap Auto-Apply</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #F8FAFC; color: #0F172A; max-width: 780px; margin: 32px auto; padding: 0 18px; line-height: 1.65; }
+  h1 { color: #043873; }
+  h2 { color: #043873; margin-top: 32px; border-top: 2px solid #BFDBFE; padding-top: 18px; }
+  .step { background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; padding: 14px 16px; margin: 10px 0; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 0.78rem; font-weight: 800; }
+  .ok { background: #ECFDF5; color: #065F46; border: 1px solid #A7F3D0; }
+  .warn { background: #FEF3C7; color: #92400E; border: 1px solid #FCD34D; }
+  code { background: #F1F5F9; padding: 1px 6px; border-radius: 4px; font-family: ui-monospace, monospace; }
+  pre { background: #0F172A; color: #E2E8F0; padding: 14px 16px; border-radius: 10px; overflow-x: auto; font-size: 0.86rem; }
+  kbd { background: #F8FAFC; border: 1px solid #CBD5E1; border-bottom-width: 2px; padding: 1px 6px; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 0.86em; }
+</style>
+</head>
+<body>
+
+<h1>📘 Guia de Instalação — VagasZap Auto-Apply</h1>
+
+<p>Siga os 5 passos abaixo <b>uma vez</b>. Depois, basta clicar em <b>"Iniciar LinkedIn Auto-Apply"</b> ou clicar em qualquer vaga do site VagasZap — a extensão faz o resto, no seu próprio Chrome.</p>
+
+<h2>1. Instalar a extensão</h2>
+<div class="step">
+  <ol>
+    <li>Abra o Chrome e vá em <code>chrome://extensions</code></li>
+    <li>Ative <b>Modo do desenvolvedor</b> (canto superior direito)</li>
+    <li>Clique em <b>Carregar sem compactação</b> e selecione a pasta <code>public/vagaszap-extension</code> do projeto</li>
+    <li>A guia "VagasZap Auto-Apply" vai aparecer — fixe no menu do Chrome se quiser</li>
+  </ol>
+</div>
+
+<h2>2. Logar no LinkedIn e abrir a aba de busca</h2>
+<div class="step">
+  <p>Antes de tudo, garanta que você <b>já está logado</b> na sua conta do LinkedIn no Chrome.
+  Não precisa de cookie, não precisa de nada no servidor — o login é o seu próprio.</p>
+  <p>Se a página inicial do LinkedIn abrir normal com seu nome no canto, está logado ✓</p>
+</div>
+
+<h2>3. Sincronizar seu perfil com a extensão</h2>
+<div class="step">
+  <ol>
+    <li>Acesse o site <b>VagasZap</b> e faça upload do seu currículo (PDF/DOC)</li>
+    <li>Aguarde a IA analisar e exibir seu perfil preenchido</li>
+    <li>Aparecerá um botão <b>"Sync com Extensão"</b> — clique uma vez. Pronto, perfil salvo localmente na extensão.</li>
+  </ol>
+  <p><span class="badge ok">Dica</span> esse sync fica gravado no <code>chrome.storage</code> da extensão. Você só precisa repetir se mudar o currículo.</p>
+</div>
+
+<h2>4. Modo LinkedIn: auto-aplicar continuamente</h2>
+<div class="step">
+  <p>Você tem <b>duas opções</b> — ambas aplicam em todas as vagas Easy Apply remotas do Brasil, automaticamente, sem limite:</p>
+  <p><b>A) Pelo popup da extensão:</b></p>
+  <ol>
+    <li>Clique no ícone da extensão VagasZap no Chrome</li>
+    <li>Clique no botão <b>▶ Iniciar LinkedIn Auto-Apply</b></li>
+    <li>O Chrome abre automaticamente a busca Easy Apply + Brasil remoto, e vai aplicando</li>
+  </ol>
+  <p><b>B) Pelo site VagasZap:</b></p>
+  <ol>
+    <li>No site, clique no botão <b>"▶ LinkedIn Auto-Apply"</b> (dentro do card do seu perfil)</li>
+    <li>Mesma coisa — a extensão abre a busca e começa a aplicar</li>
+  </ol>
+  <p><span class="badge warn">Importante</span> mantenha o Chrome aberto. Você pode minimizar a janela, mas não feche.</p>
+</div>
+
+<h2>5. Modo ATS (Greenhouse/Ashby/Lever/Workable): clique nas vagas e a extensão preenche</h2>
+<div class="step">
+  <p>Para vagas ATS oficiais, basta <b>clicar em "Auto-Apply"</b> no card da vaga no site VagasZap.
+  A extensão vai:</p>
+  <ol>
+    <li>Abrir a vaga em <b>nova aba</b> no seu Chrome</li>
+    <li>Detectar o tipo de ATS</li>
+    <li>Preencher TODOS os campos (nome, email, telefone, escola, perguntas customizadas com IA, consentimentos)</li>
+    <li>Submeter e detectar confirmação oficial</li>
+  </ol>
+  <p>Você também pode simplesmente <b>navegar manualmente</b> em qualquer site ATS (greenhouse.io, ashbyhq.com, lever.co, workable.com) — a extensão está ativa em todos esses domínios e preenche automaticamente quando você abre uma vaga.</p>
+</div>
+
+<h2>Como funciona tecnicamente</h2>
+<div class="step">
+  <ul>
+    <li><b>Sem servidor, sem cookie, sem CDP.</b> Tudo roda no seu próprio Chrome logado.</li>
+    <li>Para perguntas abertas ("Por que você quer trabalhar aqui?"), a extensão consulta a <b>MiniMax</b> para gerar uma resposta personalizada para o cargo + empresa.</li>
+    <li>Cada candidatura fica salva no <code>chrome.storage</code> da extensão (não sai do seu computador).</li>
+  </ul>
+</div>
+
+<h2>Perguntas frequentes</h2>
+<div class="step">
+  <p><b>P: O LinkedIn pode bloquear?</b><br>
+  R: A extensão faz pausa entre vagas (≈ 4s) e detecta quando aparece captcha. Caso apareça, ela para e você resolve manualmente — depois clica de novo no botão.</p>
+  <p><b>P: Funciona em vagas LinkedIn que não são Easy Apply?</b><br>
+  R: Apenas Easy Apply. Vagas que exigem ir ao site da empresa são puladas (a extensão também processa ATS oficiais ao detectar).</p>
+  <p><b>P: As candidaturas ficam salvas onde?</b><br>
+  R: Apenas no <code>chrome.storage.local</code> da extensão. Você pode limpar pelo popup se quiser.</p>
+</div>
+
+</body>
+</html>

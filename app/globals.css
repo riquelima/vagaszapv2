@@ -1,0 +1,1190 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  /* Whitepace Color Palette */
+  --navy-primary: #043873;
+  --navy-dark: #03254c;
+  --navy-light: #0a4d9b;
+  --navy-subtle: #f0f5fc;
+
+  --blue-accent: #4F9CF9;
+  --blue-accent-hover: #3b87e8;
+  --blue-accent-light: #eef6ff;
+
+  --yellow-highlight: #FFE492;
+  --yellow-highlight-text: #785a00;
+  --yellow-subtle: #fff9e6;
+
+  --green-success: #059669;
+  --green-success-light: #ecfdf5;
+  --green-whatsapp: #25D366;
+  --green-whatsapp-dark: #1ea952;
+
+  --bg-base: #FFFFFF;
+  --bg-page: #F8FAFC;
+  --bg-subtle: #F1F5F9;
+  --bg-card: #FFFFFF;
+
+  --border-light: #E2E8F0;
+  --border-medium: #CBD5E1;
+  --border-focus: #4F9CF9;
+
+  --text-title: #1A202C;
+  --text-body: #4A5568;
+  --text-muted: #64748B;   /* ↑ contraste WCAG AA: 4.84:1 sobre #FFFFFF */
+  --text-soft: #94A3B8;    /* texto decorativo — usar apenas em ícones secundários */
+  --text-white: #FFFFFF;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-card: 0 2px 10px rgba(4, 56, 115, 0.05), 0 1px 3px rgba(0, 0, 0, 0.03);
+  --shadow-card-hover: 0 10px 25px -4px rgba(4, 56, 115, 0.09), 0 2px 6px rgba(0, 0, 0, 0.04);
+  --shadow-modal: 0 20px 50px -10px rgba(4, 56, 115, 0.18), 0 10px 20px -5px rgba(0, 0, 0, 0.06);
+
+  --font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+
+  /* ─── Spacing tokens (mobile-first) ─────────────────────────────── */
+  --spacing-2xs: 4px;
+  --spacing-xs: 8px;
+  --spacing-sm: 12px;
+  --spacing-md: 16px;
+  --spacing-lg: 20px;
+  --spacing-xl: 24px;
+  --spacing-2xl: 32px;
+  --spacing-3xl: 48px;
+
+  /* Touch targets (WCAG 2.5.5) */
+  --touch-min: 48px;
+  --touch-comfortable: 44px;
+
+  /* Layout */
+  --content-max-width: 1240px;
+  --content-side-padding: 16px;          /* mobile */
+  --content-side-padding-desktop: 24px;
+  --fab-safe-bottom: 96px;               /* espaço para o botão flutuante */
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* Sticky surface translúcida */
+  --sticky-bg: rgba(255, 255, 255, 0.78);
+  --sticky-blur: saturate(180%) blur(18px);
+
+  /* Tipografia escalável */
+  --hero-fs: clamp(1.5rem, 5vw, 2rem);
+  --hero-lh: 1.12;
+  --body-lh: 1.5;
+  --caption-lh: 1.35;
+
+  /* Easing */
+  --ease-out-cubic: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@media (min-width: 768px) {
+  :root {
+    --content-side-padding: 24px;
+  }
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html, body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  background-color: var(--bg-page);
+  color: var(--text-title);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  /* 100dvh trata a barra de endereços retrátil do Chrome Mobile */
+  min-height: 100vh;
+  min-height: 100dvh;
+  position: relative;
+  background: var(--bg-page);
+  overscroll-behavior-y: none;
+  line-height: var(--body-lh);
+  font-size: 16px;       /* evita auto-zoom do iOS em inputs */
+  padding-bottom: var(--fab-safe-bottom);
+}
+
+@media (pointer: fine) {
+  body { overscroll-behavior-y: auto; }
+}
+
+/* Custom Scrollbar - Minimalist */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+a, button {
+  cursor: pointer;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* Card Styles - Whitepace */
+.whitepace-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  box-shadow: var(--shadow-card);
+  transition: transform 0.18s var(--ease-out-cubic), box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.whitepace-card:hover {
+  border-color: #CBD5E1;
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* Touch feedback: feedback tátil no momento exato do toque.
+   Em touch devices, removemos o :hover sticky. */
+@media (hover: hover) and (pointer: fine) {
+  .whitepace-card:active {
+    transform: translateY(0) scale(0.985);
+  }
+}
+@media (hover: none) {
+  .whitepace-card:hover {
+    border-color: var(--border-light);
+    box-shadow: var(--shadow-card);
+  }
+}
+
+/* Buttons - Whitepace System */
+.btn-primary,
+.btn-navy,
+.btn-outline,
+.btn-whatsapp {
+  min-height: var(--touch-comfortable);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: background-color 0.15s ease, transform 0.12s var(--ease-out-cubic), box-shadow 0.15s ease;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: inherit;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: var(--blue-accent);
+  color: #FFFFFF;
+  border: none;
+  font-size: 0.88rem;
+  padding: 10px 20px;
+}
+
+.btn-primary:hover {
+  background: var(--blue-accent-hover);
+  transform: translateY(-1px);
+}
+.btn-primary:active {
+  background: var(--blue-accent-hover);
+  transform: translateY(0) scale(0.98);
+}
+
+.btn-navy {
+  background: var(--navy-primary);
+  color: #FFFFFF;
+  border: none;
+  font-size: 0.88rem;
+  padding: 10px 20px;
+}
+
+.btn-navy:hover {
+  background: var(--navy-dark);
+  transform: translateY(-1px);
+}
+.btn-navy:active {
+  background: var(--navy-dark);
+  transform: translateY(0) scale(0.98);
+}
+
+.btn-outline {
+  background: #FFFFFF;
+  color: var(--navy-primary);
+  border: 1px solid var(--border-light);
+  font-size: 0.86rem;
+  padding: 9px 16px;
+}
+
+.btn-outline:hover {
+  background: var(--navy-subtle);
+  border-color: #CBD5E1;
+  color: var(--navy-dark);
+}
+.btn-outline:active {
+  background: #DBE7F7;
+  transform: scale(0.98);
+}
+
+.btn-whatsapp {
+  background: var(--green-whatsapp);
+  color: #FFFFFF;
+  border: none;
+  font-size: 0.86rem;
+  padding: 9px 18px;
+}
+
+.btn-whatsapp:hover {
+  background: var(--green-whatsapp-dark);
+  transform: translateY(-1px);
+}
+.btn-whatsapp:active {
+  background: var(--green-whatsapp-dark);
+  transform: translateY(0) scale(0.98);
+}
+
+/* Em touch devices, hover premanece = ativo (sem "preso" pós-toque) */
+@media (hover: none) {
+  .btn-primary:hover, .btn-navy:hover, .btn-whatsapp:hover,
+  .btn-outline:hover {
+    transform: none;
+  }
+}
+
+/* Focus visível (A11y — keyboard users) */
+.btn-primary:focus-visible,
+.btn-navy:focus-visible,
+.btn-outline:focus-visible,
+.btn-whatsapp:focus-visible {
+  outline: 3px solid var(--blue-accent);
+  outline-offset: 2px;
+}
+
+/* Elementos interativos SOLO ícone (lixeira, fechar) → área mínima 48x48 */
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--touch-min);
+  min-height: var(--touch-min);
+  padding: 12px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  color: var(--text-body);
+  transition: background 0.15s ease, transform 0.12s var(--ease-out-cubic);
+}
+.icon-button:hover { background: var(--bg-subtle); }
+.icon-button:active { background: #DBE7F7; transform: scale(0.94); }
+.icon-button:focus-visible { outline: 3px solid var(--blue-accent); outline-offset: 2px; }
+.icon-button[aria-label] { /* A11y ok */ }
+
+/* Badges - Subtle, High-Legibility */
+.badge-clean {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 0.73rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.badge-tech {
+  background: #EFF6FF;
+  border: 1px solid #DBEAFE;
+  color: #1E40AF;
+}
+
+.badge-ops {
+  background: #F1F5F9;
+  border: 1px solid #E2E8F0;
+  color: #334155;
+}
+
+.badge-direct {
+  background: #ECFDF5;
+  border: 1px solid #A7F3D0;
+  color: #065F46;
+}
+
+.badge-highlight {
+  background: var(--yellow-subtle);
+  border: 1px solid #FDE68A;
+  color: var(--yellow-highlight-text);
+}
+
+/* Utility Animations */
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 1s linear infinite;
+}
+
+@keyframes ping {
+  75%, 100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+.match-notification-badge {
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s ease;
+}
+
+.match-notification-badge:hover {
+  transform: translateY(-2px) scale(1.05);
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   MOBILE-FIRST UTILITIES — ui-ux-pro-max inspired
+   --------------------------------------------------------------
+   Padrão:
+   • Até 768px (sm breakpoint) → layout "mobile horizontal" para cards
+   • 769–1023px               → tablet (cards em 2 colunas)
+   • ≥1024px                  → desktop (preserva layout atual)
+   ───────────────────────────────────────────────────────────────────── */
+
+/* Container principal — padding interno mais confortável no mobile */
+.vz-container {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 24px;
+  width: 100%;
+}
+
+/* Scroll horizontal com snap (segmented control no mobile) */
+.vz-tab-scroll {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.vz-tab-scroller {
+  display: flex;
+  align-items: center;
+  background: #F1F5F9;
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--border-light);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.vz-tab-scroller::-webkit-scrollbar { display: none; }
+
+/* ─── Job Card ─────────────────────────────────────────────────────────
+   Desktop (≥1024px): grid de 3 colunas (layout já existente).
+   Tablet (769–1023px): grid 2 colunas (cards verticais compactos).
+   Mobile (≤768px):     grid 2 colunas (cards compactos lado a lado)
+                        com logo da empresa + match badge visíveis.
+                        Resumo aparece como bloco compacto de 2 linhas. */
+.vz-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 18px;
+}
+
+@media (max-width: 1023px) {
+  .vz-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+}
+
+.vz-job-card {
+  position: relative;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: #FFFFFF;
+}
+
+/* ─── MOBILE APP-LIKE CAROUSEL ─────────────────────────────
+   Cards horizontais (um ao lado do outro) no mobile.
+   Ao invés de quadrados gigantes, são cards com largura de 85vw,
+   deixando o próximo card aparecer um pouco para instigar o scroll. */
+@media (max-width: 768px) {
+  .vz-card-grid {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    gap: 14px;
+    padding: 10px var(--content-side-padding) 20px;
+    margin: 0 calc(-1 * var(--content-side-padding));
+    scrollbar-width: none;
+  }
+  .vz-card-grid::-webkit-scrollbar { display: none; }
+  
+  .vz-card-grid > .vz-job-card {
+    flex: 0 0 auto;
+    width: 85vw;
+    max-width: 340px;
+    scroll-snap-align: center;
+    
+    /* Layout Interno do Card via GRID */
+    display: grid !important;
+    grid-template-columns: 50px 1fr;
+    gap: 6px 10px;
+    padding: 14px !important; /* overrides inline styles */
+    height: auto !important;
+    min-height: auto !important;
+    align-items: start;
+  }
+
+  /* Ocultar a badge gigante do topo no mobile (já temos a pequena na side) */
+  .vz-job-card > .vz-match-badge {
+    display: none !important;
+  }
+
+  /* Coluna Lateral (Logo + Badge) */
+  .vz-job-card .vz-side {
+    grid-column: 1;
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Header flexível com título */
+  .vz-job-card .vz-card-hd {
+    grid-column: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+  
+  .vz-job-card .vz-card-hd h3 {
+    font-size: clamp(0.95rem, 5vw, 1.15rem);
+    line-height: 1.25;
+    white-space: normal;
+    display: block; /* Remove truncamento */
+    overflow: visible;
+  }
+
+  /* Meta (Salário e Localização) */
+  .vz-job-card .vz-card-meta {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 0.8rem;
+    margin-top: 2px;
+  }
+
+  /* Resumo da vaga visível no mobile, mas com limites! */
+  .vz-card-sum { 
+    grid-column: 1 / -1;
+    display: block !important; 
+    margin-top: 2px;
+  }
+  
+  .vz-card-sum p {
+    font-size: 0.78rem;
+    padding: 8px 10px;
+    margin: 0;
+    display: block;
+    max-height: none; /* Caiba todo o resumo sem scroll */
+    overflow: visible;
+  }
+  
+  /* Tags (Skills) mais limpas */
+  .vz-card-tags { 
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  /* Ações: botões lado a lado */
+  .vz-card-acts {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    margin-top: 6px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-light);
+  }
+  
+  .vz-card-acts > * { 
+    flex: 1; 
+    justify-content: center; 
+    font-size: 0.82rem !important; 
+    padding: 10px !important; 
+    min-height: 44px !important; /* Mobile-first UI/UX rule compliance */
+  }
+}
+
+.vz-job-card .vz-side {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (min-width: 769px) {
+  .vz-job-card .vz-side { display: none; }
+}
+
+/* Desktop: libera a restrição de altura */
+.vz-job-card {
+  min-height: 200px;
+}
+@media (min-width: 769px) {
+  .vz-job-card { min-height: 260px; } /* max-height removido para não bugar o conteúdo */
+}
+
+/* Dots indicadores do carrossel (ocultos, removido o carrossel no mobile) */
+.vz-carousel-dots {
+  display: none;
+}
+
+/* Logo quadrado dentro do card (desktop, no mobile ocultamos a sidebar) */
+.vz-company-logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  background: var(--navy-subtle);
+  border: 1px solid #DBEAFE;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  color: var(--navy-primary);
+  font-size: 0.95rem;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Cabeçalho do card (badge + data + título) */
+.vz-card-hd { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.vz-card-hd h3 {
+  font-size: clamp(1.05rem, 2vw, 1.15rem);
+  font-weight: 800;
+  color: var(--navy-primary);
+  line-height: 1.3;
+  margin: 0;
+  white-space: normal;
+  display: block;
+}
+
+.vz-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 0.8rem;
+  color: var(--text-body);
+  align-items: center;
+}
+
+.vz-card-sum { font-size: 0.84rem; }
+.vz-card-sum p {
+  color: var(--text-body);
+  line-height: 1.5;
+  background: var(--bg-subtle);
+  padding: 10px 12px;
+  border-radius: 6px;
+  border-left: 3px solid var(--navy-primary);
+  margin: 0;
+  display: block;
+  max-height: 160px; /* Mobile tem rolagem se for muito grande */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+@media (min-width: 769px) {
+  .vz-card-sum p {
+    max-height: none; /* No desktop, exibe tudo sem rolagem */
+    overflow: visible;
+  }
+}
+
+.vz-card-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; }
+.vz-card-acts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-light);
+}
+
+/* Botões maiores e mais tocáveis no mobile */
+@media (max-width: 768px) {
+  .btn-primary, .btn-navy, .btn-outline, .btn-whatsapp {
+    min-height: 42px;
+    padding: 10px 14px;
+  }
+}
+
+/* Match badge (canto superior direito) — no mobile vira parte da side column */
+.vz-match-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border-light);
+  box-shadow: var(--shadow-sm);
+  color: var(--text-body);
+  font-size: 0.74rem;
+  font-weight: 800;
+  cursor: help;
+}
+@media (max-width: 768px) {
+  .vz-match-badge {
+    position: static;
+    box-shadow: none;
+    padding: 2px 7px;
+    font-size: 0.68rem;
+  }
+}
+
+/* ─── Modal (Auto Apply) vira bottom-sheet no mobile ────────────────────── */
+@media (max-width: 768px) {
+  .vz-modal-backdrop {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+  .vz-modal {
+    max-width: 100% !important;
+    width: 100% !important;
+    border-radius: 16px 16px 0 0 !important;
+    max-height: 92vh !important;
+    overflow-y: auto !important;
+    padding: 22px 18px !important;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)) !important;
+    animation: vz-bottom-sheet 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes vz-bottom-sheet {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+  }
+}
+
+/* ─── Section spacing economy in mobile ────────────────────────────────── */
+@media (max-width: 768px) {
+  .vz-section { padding-left: 16px !important; padding-right: 16px !important; }
+  .vz-section--tight { padding-top: 20px !important; padding-bottom: 24px !important; }
+}
+
+/* Tap targets (A11Y) */
+@media (max-width: 768px) {
+  button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
+}
+
+/* Header sticky mais compacto no mobile */
+@media (max-width: 768px) {
+  .vz-header { padding: 12px 16px !important; }
+  .vz-header .vz-logo-text { font-size: 1.1rem !important; }
+}
+
+/* Hero typography responsivo (clamp já no código do page.tsx) */
+@media (max-width: 768px) {
+  .vz-hero h1 {
+    font-size: 1.85rem !important;
+    line-height: 1.18 !important;
+  }
+  .vz-hero p { font-size: 0.95rem !important; }
+}
+
+/* Resume upload zone: full-bleed no mobile */
+@media (max-width: 768px) {
+  .vz-resume-card { padding: 28px 18px !important; }
+}
+
+/* Reduce motion (A11y) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ─── CARDS DE INFORMAÇÕES DO CURRÍCULO (scroll horizontal mobile) ─────
+   - Mobile (≤768px): scroll horizontal com snap (economiza altura)
+   - Tablet/Desktop: grid de até 3 colunas (cards lado a lado) */
+.vz-info-row {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin: var(--spacing-sm) 0 0;
+  padding-bottom: 4px;
+}
+
+.vz-info-row .vz-info-card {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-light);
+  min-height: 56px;
+}
+
+.vz-info-row .vz-info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.vz-info-row .vz-info-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;        /* permite truncamento */
+  flex: 1 1 auto;
+  container-type: inline-size; /* Habilita container queries para o texto interno */
+}
+
+.vz-info-row .vz-info-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vz-info-row .vz-info-value {
+  font-size: clamp(0.55rem, 6cqi, 0.84rem);
+  font-weight: 800;
+  color: var(--navy-primary);
+  line-height: 1.25;
+  /* Sem quebra de linha, reduz a fonte pra caber */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* Fallback de segurança */
+}
+
+/* Mobile (≤768px): scroll horizontal com snap, esconde scrollbar */
+@media (max-width: 768px) {
+  .vz-info-row {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    scroll-padding-left: 0;
+    gap: 10px;
+    padding: 4px 4px 10px;
+    margin: 12px -4px 0;     /* full-bleed para o scroll */
+    scrollbar-width: none;
+  }
+  .vz-info-row::-webkit-scrollbar { display: none; }
+  .vz-info-row .vz-info-card {
+    flex: 0 0 85%;
+    max-width: 300px;
+    scroll-snap-align: start;
+  }
+}
+
+@media (min-width: 769px) {
+  .vz-info-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+  }
+}
+
+/* Hint de orientação do scroll horizontal (só mobile) */
+.vz-info-hint {
+  display: none;
+}
+@media (max-width: 768px) {
+  .vz-info-hint {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-align: center;
+    letter-spacing: 0.02em;
+  }
+}
+
+/* ─── CHIPS DE SKILLS DO CANDIDATO ───────────────────────────── */
+.vz-skills-row {
+  display: grid;
+  grid-template-rows: auto auto; /* Limita a duas linhas */
+  grid-auto-flow: column; /* Faz fluir na horizontal */
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.vz-skills-row::-webkit-scrollbar { display: none; }
+
+.vz-skill-chip {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-light);
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--navy-primary);
+  white-space: nowrap;
+}
+
+/* ─── HEADER DO CANDIDATO — containers com min-width:0 + ellipsis ───── */
+.vz-candidate-header,
+.vz-candidate-header * {
+  min-width: 0;
+}
+
+.vz-candidate-id-text .badge-clean {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .vz-candidate-id {
+    flex: 1 1 100% !important;     /* empilha nome em cima, ações embaixo */
+  }
+  .vz-profile-actions {
+    justify-content: flex-start !important;
+  }
+}
+
+/* ─── TIPOGRAFIA PREMIUM ─────────────────────────────────────────────
+   line-heights precisos para evitar "respiro" exagerado no mobile */
+.vz-hero h1 {
+  font-size: var(--hero-fs) !important;
+  line-height: var(--hero-lh) !important;
+  letter-spacing: -0.02em;
+}
+.vz-hero p {
+  font-size: clamp(0.95rem, 2.4vw, 1.12rem) !important;
+  line-height: 1.55 !important;
+}
+
+.vz-summary-block {
+  font-size: 0.92rem !important;
+  line-height: 1.65 !important;
+  color: var(--text-body);
+}
+
+/* Textos longos em cards/labels com line-height premium */
+p, li, label, button, span { line-height: var(--body-lh); }
+small, .text-caption { line-height: var(--caption-lh); }
+
+/* ─── HEADER STICKY TRANSLÚCIDO (Sticky Elements) ─────────────────── */
+.vz-header {
+  background: var(--sticky-bg) !important;
+  backdrop-filter: var(--sticky-blur);
+  -webkit-backdrop-filter: var(--sticky-blur);
+  border-bottom: 1px solid rgba(4, 56, 115, 0.08) !important;
+  box-shadow: 0 1px 12px rgba(4, 56, 115, 0.04) !important;
+}
+
+/* Sticky da barra de busca + segmented control (categorias) — em desktop */
+.vz-toolbar-sticky {
+  position: sticky;
+  top: 68px; /* altura do header mobile */
+  z-index: 40;
+  background: var(--sticky-bg);
+  backdrop-filter: var(--sticky-blur);
+  -webkit-backdrop-filter: var(--sticky-blur);
+  border-bottom: 1px solid rgba(4, 56, 115, 0.06);
+  padding: 10px 0;
+  margin-bottom: 8px;
+}
+@media (min-width: 768px) {
+  .vz-toolbar-sticky { top: 76px; }
+}
+
+/* ─── CHIPS DE FILTRO TEMPORAL (scroll horizontal limpo) ───────────── */
+.vz-chip-scroller {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 8px var(--spacing-md);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  scroll-padding-left: var(--spacing-md);
+}
+.vz-chip-scroller > * { scroll-snap-align: start; flex-shrink: 0; }
+.vz-chip-scroller::-webkit-scrollbar { display: none; }
+.vz-chip-scroller { scrollbar-width: none; }
+
+.vz-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--touch-comfortable);
+  padding: 8px 14px;
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  background: #FFFFFF;
+  color: var(--text-body);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.12s var(--ease-out-cubic);
+}
+.vz-chip:hover { background: var(--navy-subtle); }
+.vz-chip:active { transform: scale(0.97); }
+.vz-chip:focus-visible { outline: 3px solid var(--blue-accent); outline-offset: 2px; }
+.vz-chip[aria-pressed="true"],
+.vz-chip.is-active {
+  background: var(--navy-primary);
+  border-color: var(--navy-primary);
+  color: #FFFFFF;
+}
+
+/* ─── BOTÕES DE PERFIL (Henrique) — flex-wrap simétrico ───────────── */
+.vz-profile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  align-items: stretch;
+  justify-content: flex-end;
+}
+.vz-profile-actions > * { flex: 1 1 auto; min-width: 0; }
+@media (max-width: 420px) {
+  /* iPhone SE — todos os botões crescem uniformemente */
+  .vz-profile-actions > * {
+    flex: 1 1 calc(50% - var(--spacing-xs));
+    min-height: 42px;
+    font-size: 0.78rem !important;
+  }
+  .vz-profile-actions > .vz-icon-only {
+    flex: 0 0 var(--touch-min);
+  }
+}
+
+/* ─── FILTROS de período (ajusta container atual para virar scroller) ─ */
+.vz-period-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--spacing-xs);
+  padding: 8px var(--spacing-md);
+  background: #FFFFFF;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.vz-period-row::-webkit-scrollbar { display: none; }
+.vz-period-row > .vz-period-label {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--text-body);
+  font-weight: 700;
+  padding-right: 4px;
+}
+
+/* ─── FAB "N" — botão flutuante decorativo (renderizar opcional) ───── */
+.vz-fab {
+  position: fixed;
+  right: calc(16px + var(--safe-bottom));
+  bottom: calc(16px + var(--safe-bottom));
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #0a0a0a;
+  color: #FFFFFF;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28), 0 4px 8px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  z-index: 60;
+  font-weight: 800;
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+  transition: transform 0.15s var(--ease-out-cubic), box-shadow 0.15s ease;
+}
+.vz-fab:active { transform: scale(0.92); box-shadow: 0 4px 14px rgba(0,0,0,0.18); }
+.vz-fab:focus-visible { outline: 3px solid var(--blue-accent); outline-offset: 3px; }
+
+/* ─── Inputs — tipo 16px para não auto-zoomar no iOS ─────────────── */
+input, select, textarea {
+  font-size: 16px; /* impede zoom do Safari/Chrome mobile ao focar */
+  font-family: inherit;
+}
+@media (min-width: 768px) {
+  input, select, textarea { font-size: 0.9rem; }
+}
+
+/* ─── Section spacing economy in mobile ──────────────────────────── */
+@media (max-width: 768px) {
+  .vz-section {
+    padding-left: var(--content-side-padding) !important;
+    padding-right: var(--content-side-padding) !important;
+  }
+  .vz-section--tight { padding-top: 20px !important; padding-bottom: 24px !important; }
+}
+
+/* Tap targets A11y: remove highlight invasivo */
+button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
+
+/* Estilo base para a área da home — usa 100dvh e flex column */
+.vz-app {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-page);
+}
+
+/* Visually-hidden — para texto acessível sem visual */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* ─── LEGENDA DE ADERÊNCIA ─────────────────────────────────────────── */
+.vz-match-legend-container {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.vz-match-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.vz-match-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+@media (max-width: 768px) {
+  .vz-match-legend-container {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    gap: 12px;
+  }
+  
+  .vz-match-legend-row {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    width: 100%;
+    gap: 2px;
+  }
+  
+  .vz-match-item {
+    font-size: 0.62rem;
+    white-space: nowrap;
+  }
+  
+  .vz-match-sort-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+.vz-match-header-text {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.8rem;
+  min-width: 0;
+}
+.vz-match-title {
+  flex-shrink: 0;
+  font-weight: 800;
+}
+.vz-match-subtitle {
+  margin-left: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+@media (max-width: 768px) {
+  .vz-match-header-text { font-size: 0.72rem; }
+}
+
+.vz-search-input::placeholder {
+  color: #94A3B8;
+  font-size: 13px;
+  font-weight: 400;
+  opacity: 0.8; /* mais apagado */
+}
+.vz-search-input {
+  /* garante que a fonte também caiba no mobile e não corte */
+  font-size: 14px;
+}

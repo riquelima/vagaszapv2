@@ -1,0 +1,82 @@
+{
+  "manifest_version": 3,
+  "name": "VagasZap Auto-Apply",
+  "version": "1.0.0",
+  "description": "Auto-aplica em vagas LinkedIn (Easy Apply) e ATS oficiais (Greenhouse, Ashby, Lever, Workable). Use o site VagasZap e clique nas vagas \u2014 a extensao abre e preenche tudo na sua propria aba do Chrome.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "VagasZap Auto-Apply",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.linkedin.com/jobs/*",
+        "*://*.linkedin.com/jobs/view/*",
+        "*://*.linkedin.com/jobs/search/*",
+        "*://*.linkedin.com/jobs/collections/*"
+      ],
+      "js": ["content_linkedin.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    },
+    {
+      "matches": [
+        "*://*.greenhouse.io/*",
+        "*://boards.greenhouse.io/*",
+        "*://*.ashbyhq.com/*",
+        "*://*.lever.co/*",
+        "*://*.workable.com/*"
+      ],
+      "js": ["content_ats.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    },
+    {
+      "matches": [
+        "*://localhost/*",
+        "*://127.0.0.1/*",
+        "*://*.vagaszap.com/*",
+        "*://*.vagaszap.app/*"
+      ],
+      "js": ["content_bridge.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "*://*.linkedin.com/*",
+    "*://*.greenhouse.io/*",
+    "*://boards.greenhouse.io/*",
+    "*://*.ashbyhq.com/*",
+    "*://*.lever.co/*",
+    "*://*.workable.com/*",
+    "*://localhost/*",
+    "*://127.0.0.1/*"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["profile.json"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

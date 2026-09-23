@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=420" />
+<title>VagasZap Auto-Apply</title>
+<style>
+  :root {
+    --navy: #043873;
+    --blue: #4F9CF9;
+    --green: #10B981;
+    --red: #F43F5E;
+    --amber: #F59E0B;
+    --bg: #F8FAFC;
+    --card: #FFFFFF;
+    --border: #E2E8F0;
+    --muted: #64748B;
+    --text: #0F172A;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    width: 420px;
+    padding: 18px 18px 22px;
+    line-height: 1.5;
+  }
+  h1 {
+    font-size: 1.15rem; font-weight: 800; margin: 0 0 4px; color: var(--navy);
+    display: flex; align-items: center; gap: 8px;
+  }
+  h1 .badge {
+    background: #ECFDF5; color: #065F46; border: 1px solid #A7F3D0;
+    border-radius: 999px; font-size: 0.65rem; font-weight: 800;
+    padding: 3px 8px; letter-spacing: 0.03em;
+  }
+  .sub { color: var(--muted); font-size: 0.78rem; margin-bottom: 14px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; margin-bottom: 12px;
+  }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #F1F5F9; color: var(--navy);
+    padding: 5px 10px; border-radius: 999px;
+    font-size: 0.74rem; font-weight: 700;
+  }
+  .pill.ok { background: #ECFDF5; color: #065F46; border: 1px solid #A7F3D0; }
+  .pill.warn { background: #FEF3C7; color: #92400E; border: 1px solid #FCD34D; }
+  .pill.bad { background: #FEF2F2; color: #B91C1C; border: 1px solid #FCA5A5; }
+  .step-list { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 4px; }
+  .step { display: flex; align-items: flex-start; gap: 10px; font-size: 0.82rem; }
+  .step .n {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--navy); color: white; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.72rem; font-weight: 800;
+  }
+  .step .txt { color: var(--text); }
+  .step .txt b { color: var(--navy); }
+  button {
+    width: 100%;
+    background: linear-gradient(135deg, #043873 0%, #4F9CF9 100%);
+    color: white; border: none; padding: 12px 14px;
+    font-size: 0.9rem; font-weight: 800;
+    border-radius: 10px; cursor: pointer;
+  }
+  button:hover { filter: brightness(1.05); }
+  button.secondary {
+    background: white; color: var(--navy);
+    border: 1px solid var(--border);
+  }
+  button.green {
+    background: linear-gradient(135deg, #065F46 0%, #10B981 100%);
+  }
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .note {
+    font-size: 0.74rem; color: var(--muted);
+    background: #F8FAFC; border: 1px dashed var(--border);
+    border-radius: 8px; padding: 10px 12px;
+  }
+  .stats { display: flex; gap: 8px; margin: 6px 0 10px; }
+  .stat {
+    flex: 1; background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 12px; text-align: center;
+  }
+  .stat .v { font-size: 1.2rem; font-weight: 800; color: var(--navy); }
+  .stat .l { font-size: 0.7rem; color: var(--muted); font-weight: 600; }
+  code {
+    background: #F1F5F9; padding: 1px 5px; border-radius: 4px;
+    font-family: ui-monospace, monospace; font-size: 0.78rem;
+  }
+</style>
+</head>
+<body>
+
+<h1>VagasZap Auto-Apply <span class="badge" id="ver">v1.0</span></h1>
+<div class="sub">A extensão abre as vagas no SEU Chrome logado (LinkedIn, Greenhouse, Ashby, Lever, Workable) e preenche 100%.</div>
+
+<div class="card">
+  <div class="row">
+    <div style="font-weight: 800; color: var(--navy); font-size: 0.86rem;">Status do Perfil</div>
+    <span id="profilePill" class="pill warn">Sem perfil</span>
+  </div>
+  <div id="profileInfo" style="margin-top: 8px; font-size: 0.78rem; color: var(--muted);">
+    Acesse <b>vagaszap.com</b>, faça upload do currículo e clique em <b>"Sync com Extensão"</b>.
+  </div>
+</div>
+
+<div class="card" id="linkedinCard">
+  <div style="font-weight: 800; color: var(--navy); margin-bottom: 8px;">🟦 LinkedIn — Auto-Apply Contínuo</div>
+  <div style="font-size: 0.78rem; color: var(--muted); margin-bottom: 10px;">
+    Abre a busca Easy Apply + Brasil remoto e aplica em vagas
+    <b>automaticamente, sem limite</b>, na ordem em que aparecem. Você só acompanha.
+  </div>
+  <div class="step-list">
+    <div class="step"><div class="n">1</div><div class="txt">Já está <b>logado</b> no LinkedIn no Chrome? (obrigatório)</div></div>
+    <div class="step"><div class="n">2</div><div class="txt">Clique em <b>“Iniciar LinkedIn Auto-Apply”</b> abaixo</div></div>
+    <div class="step"><div class="n">3</div><div class="txt">A extensão abre a busca, lê cada vaga, preenche (com IA) e envia a candidatura</div></div>
+  </div>
+  <button id="btnLinkedin" class="green" style="margin-top: 8px;">▶ Iniciar LinkedIn Auto-Apply</button>
+</div>
+
+<div class="card" id="atsCard">
+  <div style="font-weight: 800; color: var(--navy); margin-bottom: 8px;">🟨 Greenhouse / Ashby / Lever / Workable</div>
+  <div style="font-size: 0.78rem; color: var(--muted); margin-bottom: 10px;">
+    Funciona em <b>todas as vagas com formulário oficial</b> que você abrir durante a navegação normal,
+    incluindo as que você clicar pelo site VagasZap (que serão abertas em nova aba).
+  </div>
+  <button class="secondary" id="btnGuide">📘 Ver guia passo a passo</button>
+</div>
+
+<div class="card">
+  <div style="font-weight: 800; color: var(--navy); margin-bottom: 8px;">📊 Estatísticas desta sessão</div>
+  <div class="stats">
+    <div class="stat"><div class="v" id="statApplied">0</div><div class="l">Aplicadas</div></div>
+    <div class="stat"><div class="v" id="statError">0</div><div class="l">Erros</div></div>
+  </div>
+  <button class="secondary" id="btnReset">🗑 Limpar histórico de candidaturas</button>
+</div>
+
+<div class="note">
+  ⚙️ Como instalar: abra <code>chrome://extensions</code> → ative <b>Modo do desenvolvedor</b> →
+  <b>Carregar sem compactação</b> → selecione a pasta <code>vagaszap-extension</code>.
+  A extensão envia seu perfil automaticamente e abre as vagas no seu Chrome logado.
+</div>
+
+<script src="popup.js"></script>
+</body>
+</html>
