@@ -5,15 +5,18 @@ import { execFile } from 'child_process';
 import util from 'util';
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase Client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
-
 const execFileAsync = util.promisify(execFile);
 
 export async function POST(request: Request) {
   try {
+    // Initialize Supabase Client inside the handler so build doesn't fail on missing env vars
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+    let supabase = null;
+    if (supabaseUrl && supabaseKey) {
+      supabase = createClient(supabaseUrl, supabaseKey);
+    }
+
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
 
@@ -47,19 +50,24 @@ export async function POST(request: Request) {
 
       // Upload to Supabase Storage
       const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}${safeExt}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('resumes')
-        .upload(fileName, buffer, {
-          contentType: file.type,
-          upsert: true
-        });
-
       let resumeUrl = '';
-      if (!uploadError && uploadData) {
-        const { data: publicUrlData } = supabase.storage.from('resumes').getPublicUrl(fileName);
-        resumeUrl = publicUrlData.publicUrl;
+
+      if (supabase) {
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('resumes')
+          .upload(fileName, buffer, {
+            contentType: file.type,
+            upsert: true
+          });
+
+        if (!uploadError && uploadData) {
+          const { data: publicUrlData } = supabase.storage.from('resumes').getPublicUrl(fileName);
+          resumeUrl = publicUrlData.publicUrl;
+        } else {
+          console.warn("Could not upload resume to Supabase:", uploadError);
+        }
       } else {
-        console.warn("Could not upload resume to Supabase:", uploadError);
+        console.warn("Supabase client not initialized, skipping resume upload.");
       }
 
       result.profile.resume_url = resumeUrl; // Append to profile
