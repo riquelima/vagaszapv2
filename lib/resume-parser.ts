@@ -23,8 +23,11 @@ async function getPdfjs() {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const pdfjs: any = await import('pdfjs-dist/legacy/build/pdf.mjs');
   // Disable worker: we run once per request inside a serverless function.
-  pdfjs.GlobalWorkerOptions = pdfjs.GlobalWorkerOptions || {};
-  pdfjs.GlobalWorkerOptions.workerSrc = '';
+  // `GlobalWorkerOptions` is an ESM live binding (getter-only on the module
+  // namespace) so we must mutate the imported object directly instead of
+  // reassigning the property on the namespace.
+  const { GlobalWorkerOptions } = pdfjs;
+  if (GlobalWorkerOptions) GlobalWorkerOptions.workerSrc = '';
   return pdfjs;
 }
 
