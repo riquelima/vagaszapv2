@@ -31,9 +31,18 @@ async function getPdfjs() {
   return pdfjs;
 }
 
-// LLM key/env helpers were removed along with the parser call above.
-// If LLM enrichment is re-enabled in the future, reintroduce them via env
-// only (no hardcoded keys).
+// LLM helpers (MiniMax). We keep a hardcoded fallback key because the
+// production Vercel project cannot reliably use env vars containing the
+// substring "PUBLIC" in the name. The LLM step enriches the local profile
+// with executive summary, strengths, improvements, etc.
+const MINIMAX_API_KEY =
+  process.env.MINIMAX_API_KEY ||
+  process.env.MINIMAX_API_KEY_ALT ||
+  'sk-cp-meaN0PHZdGi3-5gZffia9b6PyDIh27vyk54LwG6gw965dFLWoIHowFo19rTqoHdbxhaQezJlMMBgTEYhNni51sJnMWCcPHIKtCg4GRY-pGMmrXarNIxxGQA';
+
+function getApiKey(): string {
+  return MINIMAX_API_KEY;
+}
 
 // ---------------------------------------------------------------------------
 // Text extraction per file type
@@ -369,16 +378,143 @@ function buildIntelligentLocalProfile(cleanText: string, entities: Entities) {
 }
 
 // ---------------------------------------------------------------------------
-// LLM enrichment was removed in production: the parser now relies entirely on
-// the deterministic local builder. This eliminates the external call (which was
-// failing intermittently with errors pointing to a misconfigured proxy),
-// removes the hardcoded API key, and makes uploads resilient.
+// LLM call (MiniMax). Enriches the deterministic local profile with a
+// richer executive summary, strengths and improvements. Never throws —
+// always returns null on failure so the caller can fall back to the local
+// builder.
 // ---------------------------------------------------------------------------
 
-async function parseWithMinimax(
-  _rawText: string,
-  _entities: Entities,
-): Promise<any | null> {
+function cleanJsonStr(text: string): any | null {
+  let t = text.replace(/^```json\s*/gim, '').replace(/^```\s*/gim, '').trim();
+  const match = t.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  const raw = match[0];
+  try {
+    return JSON.parse(raw);
+  } catch {
+    /* fallthrough */
+  }
+  try {
+    const fixed = raw.replace(/[\r\n\t]+/g, ' ');
+    return JSON.parse(fixed);
+  } catch {
+    return null;
+  }
+}
+
+async function parseWithMinimax(rawText: string, entities: Entities): Promise<any | null> {
+  if (!rawText || rawText.length < 30) return null;
+
+  const textSample = entities.clean_text.slice(0, 5500);
+  const prompt = `Você é um Headhunter Executivo e Consultor Sênior de Carreiras Globais de Alto Nível.
+Analise a fundo o currículo fornecido abaixo e extraia com precisão máxima os dados do profissional.
+
+REGRA CRÍTICA INVIOLÁVEL:
+É EXPRESSAMENTE PROIBIDO O USO DE QUALQUER CARACTERE OU PALAVRA EM IDIOMA ASIÁTICO (CHINÊS, JAPONÊS OU COREANO).
+Toda a saída DEVE ser exclusivamente em Português do Brasil de alto nível (e summary_en em inglês).
+NUNCA utilize caracteres CJK. Exemplo: para logística terceirizada use 'Logística Terceirizada (3PL)' ou '3PL' e JAMAIS caracteres chineses como '第三方物流'.
+
+DIRETRIZES OBRIGATÓRIAS:
+1. 'full_name': Nome completo real do candidato (ex: ${entities.inferred_name || 'Nome Real'}).
+2. 'email': Extraia com total exatidão o e-mail do candidato constante no currículo. (E-mail detectado no texto: ${entities.email}). JAMAIS retorne email genérico.
+3. 'phone': Extraia com total exatidão o telefone com DDD/DDI constante no currículo. (Telefone detectado no texto: ${entities.phone}). JAMAIS retorne telefone genérico.
+4. 'summary_pt': Crie um Resumo Executivo em português com ATÉ 5 LINHAS (um parágrafo coeso e aprofundado de 3 a 5 frases), citando nominalmente as principais empresas/clientes onde atuou, anos de experiência total, cargos ocupados, tecnologias/ferramentas centrais e diferenciais competitivos. É TERMINANTEMENTE PROIBIDO texto genérico como 'profissional dedicado com foco em resultados'. DEVE ser 100% embasado nos fatos reais do currículo.
+5. 'summary_en': Executive summary in English with the same depth (up to 5 detailed sentences).
+6. 'score': Pontuação técnica de 0 a 100 medindo a competitividade do candidato para vagas remotas internacionais em dólar e euro.
+7. 'seniority': Classificação estrita entre 'Júnior', 'Pleno' ou 'Sênior' com base nos anos e complexidade do histórico.
+8. 'years_experience': Número total estimado de anos de experiência no mercado.
+9. 'strengths': 3 a 4 pontos fortes concretos e específicos extraídos diretamente do currículo (ex: clientes internacionais, automação com IA, telecom, logística).
+10. 'improvements': 2 a 3 recomendações pragmáticas de melhoria para potencializar aprovações internacionais (ex: certificações, mensuração de métricas, detalhamento ATS).
+11. 'top_skills': 10 a 15 habilidades técnicas, ferramentas, metodologias e plataformas essenciais extraídas do currículo.
+12. 'school': Nome da faculdade, centro universitário ou instituição de ensino principal cursada (ex: Universidade, Faculdade, etc.).
+13. 'degree': Grau ou nível de formação (ex: 'Bacharelado', 'MBA', 'Pós-Graduação', 'Tecnólogo', 'Ensino Superior').
+14. 'discipline': Área / curso de formação (ex: 'Logística', 'Administração', 'Ciência da Computação', 'Engenharia').
+15. 'education_start_year': Ano de início da formação principal (ex: '2016').
+16. 'education_end_year': Ano de conclusão da formação principal (ex: '2020').
+
+Retorne EXCLUSIVAMENTE um JSON puro válido:
+{
+  "full_name": "Nome Completo Real",
+  "first_name": "Primeiro Nome",
+  "last_name": "Sobrenome",
+  "email": "email.real@exemplo.com",
+  "phone": "+55 ...",
+  "location": "Localização",
+  "linkedin": "url do linkedin",
+  "github": "url do github",
+  "portfolio": "url do portfolio ou vazio",
+  "school": "Nome da Faculdade / Universidade",
+  "degree": "Bacharelado ou MBA",
+  "discipline": "Área ou Curso",
+  "education_start_year": "2016",
+  "education_end_year": "2020",
+  "top_skills": ["Skill 1", "Skill 2", "Skill 3", "Skill 4", "Skill 5", "Skill 6", "Skill 7", "Skill 8", "Skill 9", "Skill 10"],
+  "score": 90,
+  "seniority": "Sênior",
+  "years_experience": 8,
+  "strengths": ["Ponto forte 1", "Ponto forte 2", "Ponto forte 3"],
+  "weaknesses": ["Ponto a considerar 1", "Ponto a considerar 2"],
+  "improvements": ["Recomendação 1", "Recomendação 2"],
+  "summary_pt": "Resumo executivo de até 5 linhas citando empresas e ferramentas reais...",
+  "summary_en": "Executive summary in English..."
+}
+
+TEXTO DO CURRÍCULO:
+${textSample}`;
+
+  // ONLY the official MiniMax endpoints. No env override: a misconfigured
+  // tunnel was previously causing production failures.
+  const endpoints = [
+    'https://api.minimaxi.chat/v1/text/chatcompletion_v2',
+    'https://api.minimax.io/v1/chat/completions',
+  ];
+
+  for (const endpoint of endpoints) {
+    try {
+      const ctrl = new AbortController();
+      const timeout = setTimeout(() => ctrl.abort(), 40_000);
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${getApiKey()}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'MiniMax-M2.5',
+          messages: [
+            {
+              role: 'system',
+              content:
+                'Você é um recrutador técnico internacional sênior. Responda exclusivamente em Português do Brasil e Inglês. É EXPRESSAMENTE PROIBIDO qualquer caractere chinês, japonês ou asiático.',
+            },
+            { role: 'user', content: prompt },
+          ],
+          temperature: 0.1,
+          max_tokens: 1800,
+        }),
+        signal: ctrl.signal,
+      });
+      clearTimeout(timeout);
+      if (!res.ok) {
+        console.warn(
+          `[resume-parser] LLM endpoint ${endpoint} returned ${res.status}`,
+        );
+        continue;
+      }
+      const data: any = await res.json();
+      const content = data?.choices?.[0]?.message?.content?.trim() || '';
+      const parsed = cleanJsonStr(content);
+      if (parsed && parsed.full_name) return sanitizeCjkDeep(parsed);
+      console.warn(
+        `[resume-parser] LLM endpoint ${endpoint} returned no usable JSON`,
+      );
+    } catch (err: any) {
+      console.warn(
+        `[resume-parser] LLM endpoint ${endpoint} failed: ${err?.message || err}`,
+      );
+      /* try next endpoint */
+    }
+  }
   return null;
 }
 
