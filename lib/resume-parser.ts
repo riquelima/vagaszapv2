@@ -463,10 +463,17 @@ Retorne EXCLUSIVAMENTE um JSON puro válido:
 TEXTO DO CURRÍCULO:
 ${textSample}`;
 
-  const endpoints = [
-    'https://api.minimaxi.chat/v1/text/chatcompletion_v2',
-    'https://api.minimax.io/v1/chat/completions',
-  ];
+  // Endpoint order:
+  // 1. Override via env (LLM_PROXY_URL / MINIMAX_API_URL) — use whichever is set.
+  // 2. Hardcoded MiniMax endpoints as a last resort.
+  const envEndpoint =
+    process.env.LLM_PROXY_URL || process.env.MINIMAX_API_URL;
+  const endpoints = envEndpoint
+    ? [envEndpoint.replace(/\/+$/, '')]
+    : [
+        'https://api.minimaxi.chat/v1/text/chatcompletion_v2',
+        'https://api.minimax.io/v1/chat/completions',
+      ];
 
   for (const endpoint of endpoints) {
     try {
@@ -494,12 +501,23 @@ ${textSample}`;
         signal: ctrl.signal,
       });
       clearTimeout(timeout);
-      if (!res.ok) continue;
+      if (!res.ok) {
+        console.warn(
+          `[resume-parser] LLM endpoint ${endpoint} returned ${res.status}`,
+        );
+        continue;
+      }
       const data: any = await res.json();
       const content = data?.choices?.[0]?.message?.content?.trim() || '';
       const parsed = cleanJsonStr(content);
       if (parsed && parsed.full_name) return sanitizeCjkDeep(parsed);
-    } catch {
+      console.warn(
+        `[resume-parser] LLM endpoint ${endpoint} returned no usable JSON`,
+      );
+    } catch (err: any) {
+      console.warn(
+        `[resume-parser] LLM endpoint ${endpoint} failed: ${err?.message || err}`,
+      );
       /* try next endpoint */
     }
   }
