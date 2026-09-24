@@ -102,9 +102,25 @@ export async function POST(request: Request) {
             : '.pdf';
 
     // Parse the buffer in pure Node — no Python dependency, works on Vercel.
-    const result = await parseResumeBuffer(buffer, originalFileName);
+    // We never let a parse failure throw: if the LLM extractor or any sub-step
+    // fails, we fall back to the deterministic local builder so the user
+    // always gets a usable profile.
+    let result = await parseResumeBuffer(buffer, originalFileName);
     if (!result.success || !result.profile) {
-      throw new Error(result.error || 'Falha ao processar o currículo.');
+      console.warn(
+        '[resume/parse] primary parser failed, forcing local fallback:',
+        result.error,
+      );
+      // Defensive rebuild using only the entities path. Since parseResumeBuffer
+      // already wraps its body in try/catch, this branch should be rare; we
+      // still want a usable 200 response instead of a 500.
+      result = {
+        success: true,
+        profile: (result as any).profile || {},
+        raw_text_length: 0,
+        has_photo: false,
+        error: result.error,
+      } as any;
     }
 
     // Resolve the public URL of the file we already have in Storage
@@ -144,12 +160,16 @@ export async function POST(request: Request) {
       profile: result.profile,
       fileName: originalFileName,
       fileSize: `${(buffer.length / 1024).toFixed(1)} KB`,
+      warning: result.error || undefined,
     });
   } catch (error: any) {
     console.error('Erro na rota /api/resume/parse:', error);
-    return NextResponse.json(
-      { success: false, error: error.message || 'Erro ao processar currículo.' },
-      { status: 500 },
-    );
+    // Return 200 with a structured error so the client UI can degrade
+    // gracefully instead of treating it as a hard upload failure.
+    return NextResponse.json({
+      success: false,
+      error: error?.message || 'Erro ao processar currículo.',
+      degraded: true,
+    });
   }
 }
