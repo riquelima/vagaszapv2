@@ -1023,8 +1023,7 @@ export default function HomePage() {
       link.includes('greenhouse.io') ||
       link.includes('boards.greenhouse.io') ||
       link.includes('ashbyhq.com') ||
-      link.includes('lever.co') ||
-      link.includes('workable.com')
+      link.includes('lever.co')
     );
   };
 

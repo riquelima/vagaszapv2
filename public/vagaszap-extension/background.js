@@ -49,7 +49,7 @@ async function notifySite(payload) {
 function isAtsUrl(url) {
   const h = (url || "").toLowerCase();
   return h.includes("greenhouse.io") || h.includes("boards.greenhouse.io")
-      || h.includes("ashbyhq.com") || h.includes("lever.co") || h.includes("workable.com");
+      || h.includes("ashbyhq.com") || h.includes("lever.co");
 }
 
 function isLinkedinJobUrl(url) {

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "VagasZap Auto-Apply",
   "version": "1.0.0",
-  "description": "Auto-aplica em vagas LinkedIn (Easy Apply) e ATS oficiais (Greenhouse, Ashby, Lever, Workable). Use o site VagasZap e clique nas vagas \u2014 a extensao abre e preenche tudo na sua propria aba do Chrome.",
+  "description": "Auto-aplica em vagas LinkedIn (Easy Apply) e ATS oficiais (Greenhouse, Ashby, Lever). Use o site VagasZap e clique nas vagas \u2014 a extensao abre e preenche tudo na sua propria aba do Chrome.",
   "action": {
     "default_popup": "popup.html",
     "default_title": "VagasZap Auto-Apply",
@@ -38,8 +38,7 @@
         "*://*.greenhouse.io/*",
         "*://boards.greenhouse.io/*",
         "*://*.ashbyhq.com/*",
-        "*://*.lever.co/*",
-        "*://*.workable.com/*"
+        "*://*.lever.co/*"
       ],
       "js": ["content_ats.js"],
       "run_at": "document_idle",
@@ -69,7 +68,6 @@
     "*://boards.greenhouse.io/*",
     "*://*.ashbyhq.com/*",
     "*://*.lever.co/*",
-    "*://*.workable.com/*",
     "*://localhost/*",
     "*://127.0.0.1/*"
   ],

@@ -493,7 +493,6 @@
     if (h.includes("greenhouse") || h.includes("boards.greenhouse.io")) return "GREENHOUSE";
     if (h.includes("ashbyhq")) return "ASHBY";
     if (h.includes("lever")) return "LEVER";
-    if (h.includes("workable")) return "WORKABLE";
     return "ATS_GENERIC";
   }
 
