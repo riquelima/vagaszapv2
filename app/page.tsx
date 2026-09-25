@@ -2184,7 +2184,7 @@ export default function HomePage() {
               <strong style={{ display: 'block', marginBottom: '6px' }}>Como instalar em 1 minuto:</strong>
               <ol style={{ margin: 0, paddingLeft: '20px' }}>
                 <li>Baixe a extensão clicando no botão abaixo e <strong>extraia o arquivo ZIP</strong>.</li>
-                <li>Abra <a href="chrome://extensions/" target="_blank" rel="noreferrer" style={{fontWeight: 'bold', textDecoration: 'underline'}}>chrome://extensions/</a> em uma nova aba do Chrome.</li>
+                <li>Copie e cole <strong style={{background: '#DBEAFE', padding: '2px 6px', borderRadius: '4px', userSelect: 'all', cursor: 'pointer'}}>chrome://extensions/</strong> na barra de endereços de uma nova aba do Chrome. <em>(Por segurança, navegadores não abrem links chrome:// diretamente)</em>.</li>
                 <li>Ative o <strong>Modo do desenvolvedor</strong> no canto superior direito.</li>
                 <li>Clique em <strong>Carregar sem compactação</strong> e selecione a pasta extraída.</li>
                 <li>Por fim, <strong>clique em "Já instalei, abrir vaga!"</strong> aqui abaixo.</li>
