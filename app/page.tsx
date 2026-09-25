@@ -2181,18 +2181,37 @@ export default function HomePage() {
             </div>
 
             <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '10px', padding: '14px 16px', marginBottom: '20px', fontSize: '0.84rem', color: '#1E40AF', lineHeight: 1.55 }}>
-              <strong style={{ display: 'block', marginBottom: '6px' }}>Como instalar:</strong>
+              <strong style={{ display: 'block', marginBottom: '6px' }}>Como instalar em 1 minuto:</strong>
               <ol style={{ margin: 0, paddingLeft: '20px' }}>
-                <li>Baixe o arquivo da extensão (já gerado na pasta <code>public/vagaszap-extension</code>).</li>
-                <li>Abra <a href="chrome://extensions/" target="_blank" rel="noreferrer" style={{fontWeight: 'bold', textDecoration: 'underline'}}>chrome://extensions/</a> numa nova aba.</li>
+                <li>Baixe a extensão clicando no botão abaixo e <strong>extraia o arquivo ZIP</strong>.</li>
+                <li>Abra <a href="chrome://extensions/" target="_blank" rel="noreferrer" style={{fontWeight: 'bold', textDecoration: 'underline'}}>chrome://extensions/</a> em uma nova aba do Chrome.</li>
                 <li>Ative o <strong>Modo do desenvolvedor</strong> no canto superior direito.</li>
-                <li>Clique em <strong>Carregar sem compactação</strong> e selecione a pasta da extensão.</li>
-                <li>Recarregue esta página!</li>
+                <li>Clique em <strong>Carregar sem compactação</strong> e selecione a pasta extraída.</li>
+                <li>Por fim, <strong>clique em "Já instalei, abrir vaga!"</strong> aqui abaixo.</li>
               </ol>
             </div>
 
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button onClick={() => setShowExtensionPopup(false)} className="btn-outline" style={{ flex: 1, padding: '10px', fontSize: '0.88rem' }}>Cancelar</button>
+            <div style={{ display: 'flex', gap: '10px', flexDirection: 'column' }}>
+              <a href="/vagaszap-extension.zip" download="vagaszap-extension.zip" style={{ textDecoration: 'none' }}>
+                <button className="btn-primary" style={{ width: '100%', padding: '12px', fontSize: '0.95rem', background: '#043873', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                  <Download size={18} /> Baixar Extensão (.zip)
+                </button>
+              </a>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button onClick={() => setShowExtensionPopup(false)} className="btn-outline" style={{ flex: 1, padding: '10px', fontSize: '0.88rem' }}>Cancelar</button>
+                <button 
+                  onClick={() => {
+                    setShowExtensionPopup(false);
+                    if (selectedJobForApply) {
+                      triggerAutoApply(selectedJobForApply);
+                    }
+                  }} 
+                  className="btn-primary" 
+                  style={{ flex: 1, padding: '10px', fontSize: '0.88rem', background: '#10B981', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                >
+                  <Check size={16} /> Já instalei, abrir vaga!
+                </button>
+              </div>
             </div>
           </div>
         </div>
