@@ -85,7 +85,13 @@ interface CandidateProfile {
   top_skills: string[];
   summary_en: string;
   summary_pt: string;
-  photo_url?: string | null;
+  photo_url: string | null;
+  extraction_warnings: string[];
+  extraction_method: 'local' | 'ai';
+  remote_score: number;
+  remote_score_criteria: { label: string; points: number; max_points: number; evidence: string }[];
+  auto_apply_score: number;
+  auto_apply_missing: string[];
   score?: number;
   seniority?: 'Júnior' | 'Pleno' | 'Sênior' | string;
   strengths?: string[];
@@ -241,6 +247,117 @@ const CompanyLogo = ({ company, logoUrl }: { company: string, logoUrl?: string }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+
+function safeProfileLink(value: string): string | null {
+  if (!value.trim()) return null;
+  try {
+    const url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
+    if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || !url.hostname.includes('.')) return null;
+    return url.href;
+  } catch { return null; }
+}
+
+function isCandidateProfile(value: unknown): value is CandidateProfile {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const p = value as Record<string, unknown>;
+  const strings = ['full_name', 'first_name', 'last_name', 'email', 'phone', 'location', 'linkedin', 'github', 'portfolio', 'summary_en', 'summary_pt'];
+  const stringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every(item => typeof item === 'string');
+  const score = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 100;
+  if (!strings.every(key => typeof p[key] === 'string')) return false;
+  if (!['target_roles', 'top_skills', 'extraction_warnings', 'auto_apply_missing'].every(key => stringArray(p[key]))) return false;
+  if (typeof p.years_experience !== 'number' || !Number.isFinite(p.years_experience) || p.years_experience < 0) return false;
+  if (!['local', 'ai'].includes(p.extraction_method as string) || !score(p.remote_score) || !score(p.auto_apply_score)) return false;
+  if (p.photo_url !== null && (typeof p.photo_url !== 'string' || !/^data:image\/(?:png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\r\n]+$/i.test(p.photo_url))) return false;
+  if (!Array.isArray(p.remote_score_criteria) || !p.remote_score_criteria.every(c => c && typeof c === 'object' && typeof c.label === 'string' && typeof c.evidence === 'string' && typeof c.points === 'number' && Number.isFinite(c.points) && typeof c.max_points === 'number' && Number.isFinite(c.max_points) && c.max_points > 0 && c.points >= 0 && c.points <= c.max_points)) return false;
+  if (!['strengths', 'weaknesses', 'improvements'].every(key => p[key] === undefined || stringArray(p[key]))) return false;
+  if (!['seniority', 'resume_url'].every(key => p[key] === undefined || typeof p[key] === 'string')) return false;
+  if (p.score !== undefined && !score(p.score)) return false;
+  return ['full_name', 'email', 'phone', 'summary_pt', 'summary_en'].some(key => (p[key] as string).trim().length > 0) || (p.top_skills as string[]).some(s => s.trim()) || (p.target_roles as string[]).some(s => s.trim());
+}
+
+function ProfileDossier({ profile: candidateProfile, onRemove }: { profile: CandidateProfile; onRemove: () => void }) {
+  const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
+  return (
+    <div className="whitepace-card" style={{ position: 'relative', padding: 'clamp(16px, 4vw, 28px)', background: '#FFFFFF', borderRadius: '16px', overflow: 'hidden' }}>
+      {/* 1. HEADER DO CANDIDATO */}
+      <header className="vz-candidate-header" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--spacing-sm)', paddingBottom: 'var(--spacing-md)', borderBottom: '1px solid var(--border-light)', marginBottom: 'var(--spacing-md)', paddingRight: '40px', minWidth: 0, }}>
+        <div className="vz-candidate-id" style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', minWidth: 0, flex: '1 1 auto', }}>
+          {candidateProfile.photo_url ? (
+            <div style={{ width: 'clamp(52px, 14vw, 60px)', height: 'clamp(52px, 14vw, 60px)', borderRadius: '50%', overflow: 'hidden', border: '2px solid var(--blue-accent)', flexShrink: 0, }}>
+              <img src={candidateProfile.photo_url} alt={`Foto de ${candidateProfile.full_name || 'candidato'}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            </div>
+          ) : (
+            <div style={{ width: 'clamp(52px, 14vw, 60px)', height: 'clamp(52px, 14vw, 60px)', borderRadius: '50%', background: 'var(--navy-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 'clamp(1.2rem, 4vw, 1.35rem)', color: '#FFFFFF', flexShrink: 0, }} aria-hidden>
+              {candidateProfile.first_name ? candidateProfile.first_name[0] : 'U'}
+            </div>
+          )}
+          <div className="vz-candidate-id-text" style={{ minWidth: 0, flex: '1 1 auto' }}>
+            <h2 title={candidateProfile.full_name} style={{ fontSize: 'clamp(1.05rem, 4vw, 1.25rem)', fontWeight: 800, color: 'var(--navy-primary)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2, }}>
+              {candidateProfile.full_name}
+            </h2>
+          </div>
+        </div>
+        <button onClick={onRemove} className="vz-trash-btn" aria-label="Excluir currículo" title="Excluir currículo anexado" style={{ position: 'absolute', top: '8px', right: '8px', color: '#DC2626', background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: '50%', width: '28px', height: '28px', minWidth: '28px', minHeight: '28px', padding: 0, cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 4px rgba(220, 38, 38, 0.1)' }}>
+          <Trash2 size={13} strokeWidth={2} aria-hidden />
+        </button>
+      </header>
+
+      {/* 2. CARDS DE INFORMAÇÕES */}
+      <section className="vz-info-row" aria-label="Dados do candidato (email, telefone, senioridade, score, match)">
+        <article className="vz-info-card" title={candidateProfile.email || ''}>
+          <div className="vz-info-icon" style={{ background: 'var(--navy-subtle)', color: 'var(--navy-primary)' }}><Mail size={14} strokeWidth={2} aria-hidden /></div>
+          <div className="vz-info-body"><span className="vz-info-label">E-mail</span><span className="vz-info-value">{candidateProfile.email || '—'}</span></div>
+        </article>
+        {candidateProfile.phone && (
+          <article className="vz-info-card" title={candidateProfile.phone}>
+            <div className="vz-info-icon" style={{ background: 'var(--navy-subtle)', color: 'var(--navy-primary)' }}><Phone size={14} strokeWidth={2} aria-hidden /></div>
+            <div className="vz-info-body"><span className="vz-info-label">Telefone</span><span className="vz-info-value">{candidateProfile.phone}</span></div>
+          </article>
+        )}
+        <article className="vz-info-card">
+          <div className="vz-info-icon" style={{ background: '#EFF6FF', color: '#1E40AF' }}><Award size={14} strokeWidth={2} aria-hidden /></div>
+          <div className="vz-info-body"><span className="vz-info-label">Senioridade</span><span className="vz-info-value">Nível {candidateProfile.seniority || 'Sênior'}</span></div>
+        </article>
+        <article className="vz-info-card" title="Score de competitividade para vagas remotas">
+          <div className="vz-info-icon" style={{ background: '#ECFDF5', color: '#065F46' }}><TrendingUp size={14} strokeWidth={2} aria-hidden /></div>
+          <div className="vz-info-body"><span className="vz-info-label">Score</span><span className="vz-info-value">{candidateProfile.remote_score}/100</span></div>
+        </article>
+        <article className="vz-info-card" title={candidateProfile.auto_apply_missing && candidateProfile.auto_apply_missing.length > 0 ? `Campos ausentes que reduzem a automação: ${candidateProfile.auto_apply_missing.join(', ')}` : "Todos os dados essenciais para automação foram preenchidos!"}>
+          <div className="vz-info-icon" style={{ background: '#FFFBEB', color: '#92400E' }}><Zap size={14} strokeWidth={2} aria-hidden /></div>
+          <div className="vz-info-body"><span className="vz-info-label">Auto-Apply</span><span className="vz-info-value">{candidateProfile.auto_apply_score}/100</span></div>
+        </article>
+        {candidateProfile.location && (
+          <article className="vz-info-card" title={candidateProfile.location}>
+            <div className="vz-info-icon" style={{ background: 'var(--navy-subtle)', color: 'var(--navy-primary)' }}><MapPin size={14} strokeWidth={2} aria-hidden /></div>
+            <div className="vz-info-body"><span className="vz-info-label">Localização</span><span className="vz-info-value">{candidateProfile.location}</span></div>
+          </article>
+        )}
+      </section>
+
+      {/* Resumo Executivo e Skills */}
+      {candidateProfile.summary_pt && (
+        <div style={{ marginTop: '16px', padding: '16px', background: 'var(--bg-subtle)', borderRadius: '12px', border: '1px solid var(--border-light)' }}>
+          <div onClick={() => setIsSummaryExpanded(!isSummaryExpanded)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', marginBottom: isSummaryExpanded ? '12px' : '0' }} aria-expanded={isSummaryExpanded} role="button" tabIndex={0}>
+            <span className="vz-info-label" style={{ display: 'block', margin: 0, fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)', fontWeight: 700 }}>Resumo Executivo</span>
+            {isSummaryExpanded ? <ChevronUp size={16} color="var(--text-muted)" aria-hidden /> : <ChevronDown size={16} color="var(--text-muted)" aria-hidden />}
+          </div>
+          {isSummaryExpanded && <p style={{ fontSize: '0.9rem', color: 'var(--text-main)', lineHeight: 1.5, margin: 0 }}>{candidateProfile.summary_pt}</p>}
+        </div>
+      )}
+      
+      {candidateProfile.top_skills && candidateProfile.top_skills.length > 0 && (
+        <div style={{ marginTop: '16px' }}>
+          <span className="vz-info-label" style={{ display: 'block', marginBottom: '8px', fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)', fontWeight: 700 }}>Skills:</span>
+          <div className="vz-skills-row">
+            {candidateProfile.top_skills.map((skill, idx) => (
+              <span key={idx} className="vz-skill-chip" title={skill}>{skill}</span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function AutomationScoreCard({ profile }: { profile: CandidateProfile }) {
   const autoScore = calculateAutomationScore(profile);
@@ -556,11 +673,6 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortByMatch, setSortByMatch] = useState(false);
   const [jobs, setJobs] = useState<JobItem[]>([]);
-  const [applications, setApplications] = useState<ApplicationRecord[]>([]);
-  const [applicationsSummary, setApplicationsSummary] = useState<Record<string, number>>({});
-  const [applicationsLoading, setApplicationsLoading] = useState(false);
-  const [showApplicationsPanel, setShowApplicationsPanel] = useState(false);
-  const [applicationsStatusFilter, setApplicationsStatusFilter] = useState<string>('all');
   const [isLoadingJobs, setIsLoadingJobs] = useState(true);
 
   // Currículo State
@@ -570,7 +682,7 @@ export default function HomePage() {
   const [parseLoadingStep, setParseLoadingStep] = useState(0);
   const [isDragOver, setIsDragOver] = useState(false);
   const [resumeError, setResumeError] = useState<string | null>(null);
-  const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
+  const uploadInFlight = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Higieniza qualquer caractere asiático/chinês acidental no frontend
@@ -593,22 +705,29 @@ export default function HomePage() {
     return obj;
   }
 
-  // Carrega perfil salvo no localStorage se já tiver sido enviado anteriormente
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('vagaszap_candidate_profile');
+      const savedFile = localStorage.getItem('vagaszap_uploaded_file');
+      if (!saved && !savedFile) return;
+      const parsed: unknown = saved ? JSON.parse(saved) : null;
+      if (!isCandidateProfile(parsed)) throw new Error('Perfil incompatível');
+      setCandidateProfile(parsed);
+      setActiveTab('match');
+      if (savedFile) {
+        try {
+          const file = JSON.parse(savedFile);
+          if (file && typeof file.name === 'string' && typeof file.size === 'string') setUploadedFile(file);
+        } catch { /* Metadados opcionais não impedem a leitura do perfil validado. */ }
+      }
+    } catch {
+      setCandidateProfile(null);
+      setUploadedFile(null);
+      setResumeError('O perfil salvo está vazio, inválido ou desatualizado. Envie seu currículo novamente para uma nova análise.');
       try {
-        const saved = localStorage.getItem('vagaszap_candidate_profile');
-        const savedFile = localStorage.getItem('vagaszap_uploaded_file');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          const sanitized = sanitizeCjkFrontend(parsed);
-          setCandidateProfile(sanitized);
-          setActiveTab('match');
-        }
-        if (savedFile) {
-          setUploadedFile(JSON.parse(savedFile));
-        }
-      } catch (e) {}
+        localStorage.removeItem('vagaszap_candidate_profile');
+        localStorage.removeItem('vagaszap_uploaded_file');
+      } catch { /* O upload continua disponível mesmo sem armazenamento local. */ }
     }
   }, []);
 
@@ -750,34 +869,6 @@ export default function HomePage() {
     }
   };
 
-  // Fetch auto-apply applications from the local bot (vagas_compat_automation)
-  const fetchApplications = async (statusFilter: string = 'all') => {
-    setApplicationsLoading(true);
-    try {
-      const url =
-        statusFilter && statusFilter !== 'all'
-          ? `/api/applications?status=${encodeURIComponent(statusFilter)}&limit=200`
-          : `/api/applications?limit=200`;
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data.success) {
-        setApplications(data.applications || []);
-        setApplicationsSummary(data.summary || {});
-      }
-    } catch (e) {
-      console.error('Erro ao buscar applications:', e);
-    } finally {
-      setApplicationsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (showApplicationsPanel) {
-      fetchApplications(applicationsStatusFilter);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showApplicationsPanel, applicationsStatusFilter]);
-
   // Escuta término real da candidatura vindo da aba da empresa (extensão)
   useEffect(() => {
     const handleCompletionMsg = (event: MessageEvent) => {
@@ -834,22 +925,17 @@ export default function HomePage() {
   }, [selectedJobForApply]);
 
   const handleFileUpload = async (file: File) => {
-    if (!file) return;
-    setIsParsingResume(true);
+    if (!file || uploadInFlight.current) return;
     setResumeError(null);
+    const safeExt = file.name.toLowerCase().match(/\.(pdf|docx|doc)$/)?.[0];
+    if (!safeExt || file.size === 0 || file.size > 50 * 1024 * 1024) {
+      setResumeError(!safeExt ? 'Formato não suportado. Envie PDF, DOCX ou DOC (o formato DOC antigo pode ser recusado).' : file.size === 0 ? 'O arquivo está vazio. Escolha outro currículo.' : 'O currículo excede o limite de 50 MB. Envie um arquivo menor.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+    uploadInFlight.current = true;
+    setIsParsingResume(true);
     setShowUploadAlert(false);
-
-    // ── Step 1: upload directly to Supabase Storage (bypasses Vercel's 4.5 MB
-    // request-body limit, allowing files up to the bucket's 50 MB ceiling).
-    const safeExt = file.name.endsWith('.docx')
-      ? '.docx'
-      : file.name.endsWith('.doc')
-        ? '.doc'
-        : file.name.endsWith('.png')
-          ? '.png'
-          : file.name.endsWith('.jpg') || file.name.endsWith('.jpeg')
-            ? '.jpg'
-            : '.pdf';
     const storagePath = `${Date.now()}_${Math.random().toString(36).substring(7)}${safeExt}`;
 
     try {
@@ -872,25 +958,38 @@ export default function HomePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ storagePath, fileName: file.name }),
       });
-      const data = await res.json();
-      if (data.success && data.profile) {
-        const sanitized = sanitizeCjkFrontend(data.profile);
-        setCandidateProfile(sanitized);
-        setActiveTab('match');
-        setUploadedFile({ name: data.fileName, size: data.fileSize });
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.setItem('vagaszap_candidate_profile', JSON.stringify(sanitized));
-            localStorage.setItem('vagaszap_uploaded_file', JSON.stringify({ name: data.fileName, size: data.fileSize }));
-          } catch(e) {}
-          window.postMessage({ type: 'VAGASZAP_SYNC_PROFILE', profile: sanitized }, '*');
-        }
-      } else {
-        setResumeError(data.error || 'Não foi possível ler o arquivo. Tente outro formato.');
+      const responseText = await res.text();
+      let data;
+      try { data = JSON.parse(responseText); } catch {
+        throw new Error(`O servidor retornou uma resposta inválida (HTTP ${res.status}). Tente novamente ou envie outro arquivo.`);
       }
-    } catch (err: any) {
-      setResumeError('Erro ao processar currículo. Verifique sua conexão.');
+      if (!res.ok || data?.success !== true) {
+        throw new Error(typeof data?.error === 'string' ? data.error : `Falha na análise do currículo (HTTP ${res.status}).`);
+      }
+      if (!isCandidateProfile(data.profile)) {
+        throw new Error('A análise retornou um perfil vazio ou incompatível. Nenhum dado foi salvo. Envie um currículo com texto legível em PDF ou DOCX.');
+      }
+      const profile = data.profile;
+      const metadata = { name: file.name, size: `${(file.size / 1024 / 1024).toFixed(2)} MB` };
+      setCandidateProfile(profile);
+      setActiveTab('match');
+      setUploadedFile(metadata);
+      try {
+        localStorage.setItem('vagaszap_candidate_profile', JSON.stringify(profile));
+        localStorage.setItem('vagaszap_uploaded_file', JSON.stringify(metadata));
+      } catch {
+        try {
+          localStorage.removeItem('vagaszap_candidate_profile');
+          localStorage.removeItem('vagaszap_uploaded_file');
+        } catch { /* O perfil permanece disponível nesta sessão. */ }
+        setResumeError('Perfil analisado, mas não foi possível salvá-lo neste navegador. Ele ficará disponível apenas nesta sessão.');
+      }
+      window.postMessage({ type: 'VAGASZAP_SYNC_PROFILE', profile }, '*');
+    } catch (err: unknown) {
+      setResumeError(err instanceof Error ? err.message : 'Falha inesperada ao processar o currículo. Tente novamente.');
     } finally {
+      uploadInFlight.current = false;
+      if (fileInputRef.current) fileInputRef.current.value = '';
       setIsParsingResume(false);
       setIsDragOver(false);
     }
@@ -929,6 +1028,8 @@ export default function HomePage() {
     );
   };
 
+  const [showExtensionPopup, setShowExtensionPopup] = useState(false);
+
   const triggerAutoApply = async (job: JobItem) => {
     if (!candidateProfile || !candidateProfile.resume_url) {
       setShowUploadAlert(true);
@@ -937,66 +1038,31 @@ export default function HomePage() {
       return;
     }
 
-    if (!job.applicationLink?.includes('boards.greenhouse.io')) {
-      alert("A versão atual do Auto-Apply Mágico suporta apenas vagas do Greenhouse.");
-      window.open(job.applicationLink, '_blank');
+    if (!isExtensionInstalled) {
+      setShowExtensionPopup(true);
       return;
     }
 
     setSelectedJobForApply(job);
-    setApplyStep(1); // 1 = loading
+    setApplyStep(1); // Mudar para tela de loading/progresso
     setApplyResult(null);
     setLiveStreamFrame(null);
-    setLiveStreamStatus('Conectando ao robô...');
+    setLiveStreamStatus('Iniciando Inteligência Artificial na aba anexa...');
 
-    const applyId = Math.random().toString(36).substring(7) + Date.now().toString(36);
+    syncProfileToExtension(); // Garante que a IA tem o perfil mais atualizado
 
-    const ws = new WebSocket('ws://185.173.110.54:4001');
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: 'subscribe', applyId }));
-    };
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.type === 'frame') {
-          setLiveStreamFrame(msg.data);
-          setLiveStreamStatus('Robô trabalhando...');
-        } else if (msg.type === 'status') {
-          setLiveStreamStatus(msg.message);
-        } else if (msg.type === 'done') {
-          ws.close();
-        }
-      } catch(e){}
-    };
+    // Dispara a extensão
+    window.postMessage(
+      { type: 'VAGASZAP_AUTO_APPLY_JOB', job, profile: candidateProfile },
+      '*'
+    );
 
-    try {
-      const res = await fetch('/api/apply/greenhouse-auto', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          job_url: job.applicationLink,
-          profile: candidateProfile,
-          applyId
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setApplyResult({ success: true, message: data.message, proof_url: data.proof_url });
-        setAppliedJobsHistory(prev => ({
-          ...prev,
-          [job.id]: {
-            jobId: job.id,
-            timestamp: new Date().toISOString(),
-            status: 'APPLIED',
-            confirmationId: 'IA_AUTO'
-          }
-        }));
-      } else {
-        setApplyResult({ success: false, error: data.error });
-      }
-    } catch (e: any) {
-      setApplyResult({ success: false, error: 'Falha de conexão com a API de Auto-Apply.' });
-    }
+    // Feedback visual imediato enquanto a extensão trabalha na outra aba
+    setApplyResult({
+      success: true,
+      message: 'A Extensão Inteligente VagasZap abriu uma aba invisível e está preenchendo o formulário com IA. Acompanhe! Esta tela avisará quando terminar e a aba for fechada.',
+      proof_url: ''
+    });
   };
 
 
@@ -1412,480 +1478,7 @@ export default function HomePage() {
             )}
           </div>
         ) : (
-          /* ESTADO PREENCHIDO: DOSSIÊ DO CANDIDATO (mobile-first, sem extensão) */
-          <div className="whitepace-card" style={{ position: 'relative', padding: 'clamp(16px, 4vw, 28px)', background: '#FFFFFF', borderRadius: '16px', overflow: 'hidden' }}>
-            {/* 1. HEADER DO CANDIDATO — sem overflow horizontal */}
-            <header className="vz-candidate-header" style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 'var(--spacing-sm)',
-              paddingBottom: 'var(--spacing-md)',
-              borderBottom: '1px solid var(--border-light)',
-              marginBottom: 'var(--spacing-md)',
-              paddingRight: '40px', /* Previne sobreposição com o botão absoluto */
-              minWidth: 0,
-            }}>
-              {/* BLOCO IDENTIDADE: avatar + nome + status */}
-              <div className="vz-candidate-id" style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--spacing-sm)',
-                minWidth: 0,
-                flex: '1 1 auto',
-              }}>
-                {candidateProfile.photo_url ? (
-                  <div style={{
-                    width: 'clamp(52px, 14vw, 60px)',
-                    height: 'clamp(52px, 14vw, 60px)',
-                    borderRadius: '50%',
-                    overflow: 'hidden',
-                    border: '2px solid var(--blue-accent)',
-                    flexShrink: 0,
-                  }}>
-                    <img
-                      src={candidateProfile.photo_url}
-                      alt={`Foto de ${candidateProfile.full_name || 'candidato'}`}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                  </div>
-                ) : (
-                  <div style={{
-                    width: 'clamp(52px, 14vw, 60px)',
-                    height: 'clamp(52px, 14vw, 60px)',
-                    borderRadius: '50%',
-                    background: 'var(--navy-primary)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontWeight: 800,
-                    fontSize: 'clamp(1.2rem, 4vw, 1.35rem)',
-                    color: '#FFFFFF',
-                    flexShrink: 0,
-                  }} aria-hidden>
-                    {candidateProfile.first_name ? candidateProfile.first_name[0] : 'U'}
-                  </div>
-                )}
-
-                <div className="vz-candidate-id-text" style={{ minWidth: 0, flex: '1 1 auto' }}>
-                  <h2
-                    title={candidateProfile.full_name}
-                    style={{
-                      fontSize: 'clamp(1.05rem, 4vw, 1.25rem)',
-                      fontWeight: 800,
-                      color: 'var(--navy-primary)',
-                      margin: 0,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      lineHeight: 1.2,
-                    }}
-                  >
-                    {candidateProfile.full_name}
-                  </h2>
-
-                </div>
-              </div>
-
-              {/* BLOCO AÇÕES: apenas exclusão posicionada no canto superior direito */}
-              <button
-                onClick={removeResume}
-                className="vz-trash-btn"
-                aria-label="Excluir currículo"
-                title="Excluir currículo anexado"
-                style={{ 
-                  position: 'absolute',
-                  top: '8px',
-                  right: '8px',
-                  color: '#DC2626',
-                  background: '#FEF2F2',
-                  border: '1px solid #FCA5A5',
-                  borderRadius: '50%',
-                  width: '28px',
-                  height: '28px',
-                  minWidth: '28px',
-                  minHeight: '28px',
-                  padding: 0,
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 2px 4px rgba(220, 38, 38, 0.1)'
-                }}
-              >
-                <Trash2 size={13} strokeWidth={2} aria-hidden />
-              </button>
-            </header>
-
-            {/* 2. CARDS DE INFORMAÇÕES — scroll horizontal no mobile, grid no desktop */}
-            <section
-              className="vz-info-row"
-              aria-label="Dados do candidato (email, telefone, senioridade, score, match)"
-            >
-              {/* CARD: E-mail */}
-              <article
-                className="vz-info-card"
-                title={candidateProfile.email || ''}
-              >
-                <div className="vz-info-icon" style={{ background: 'var(--navy-subtle)', color: 'var(--navy-primary)' }}>
-                  <Mail size={14} strokeWidth={2} aria-hidden />
-                </div>
-                <div className="vz-info-body">
-                  <span className="vz-info-label">E-mail</span>
-                  <span className="vz-info-value">{candidateProfile.email || '—'}</span>
-                </div>
-              </article>
-
-              {/* CARD: Telefone */}
-              {candidateProfile.phone && (
-                <article
-                  className="vz-info-card"
-                  title={candidateProfile.phone}
-                >
-                  <div className="vz-info-icon" style={{ background: 'var(--navy-subtle)', color: 'var(--navy-primary)' }}>
-                    <Phone size={14} strokeWidth={2} aria-hidden />
-                  </div>
-                  <div className="vz-info-body">
-                    <span className="vz-info-label">Telefone</span>
-                    <span className="vz-info-value">{candidateProfile.phone}</span>
-                  </div>
-                </article>
-              )}
-
-              {/* CARD: Senioridade */}
-              <article className="vz-info-card">
-                <div className="vz-info-icon" style={{ background: '#EFF6FF', color: '#1E40AF' }}>
-                  <Award size={14} strokeWidth={2} aria-hidden />
-                </div>
-                <div className="vz-info-body">
-                  <span className="vz-info-label">Senioridade</span>
-                  <span className="vz-info-value">Nível {candidateProfile.seniority || 'Sênior'}</span>
-                </div>
-              </article>
-
-              {/* CARD: Score do Currículo */}
-              <article className="vz-info-card">
-                <div className="vz-info-icon" style={{ background: '#ECFDF5', color: '#065F46' }}>
-                  <TrendingUp size={14} strokeWidth={2} aria-hidden />
-                </div>
-                <div className="vz-info-body">
-                  <span className="vz-info-label">Score</span>
-                  <span className="vz-info-value">{candidateProfile.score || 88}/100</span>
-                </div>
-              </article>
-
-              {/* CARD: Compatibilidade de Automação */}
-              <article className="vz-info-card">
-                <div className="vz-info-icon" style={{ background: '#FFFBEB', color: '#92400E' }}>
-                  <Zap size={14} strokeWidth={2} aria-hidden />
-                </div>
-                <div className="vz-info-body">
-                  <span className="vz-info-label">Auto-Apply</span>
-                  <span className="vz-info-value">{candidateProfile.score ? `${candidateProfile.score}/100` : '95/100'}</span>
-                </div>
-              </article>
-
-              {/* CARD: Localização (se houver) */}
-              {candidateProfile.location && (
-                <article
-                  className="vz-info-card"
-                  title={candidateProfile.location}
-                >
-                  <div className="vz-info-icon" style={{ background: 'var(--navy-subtle)', color: 'var(--navy-primary)' }}>
-                    <MapPin size={14} strokeWidth={2} aria-hidden />
-                  </div>
-                  <div className="vz-info-body">
-                    <span className="vz-info-label">Localização</span>
-                    <span className="vz-info-value">{candidateProfile.location}</span>
-                  </div>
-                </article>
-              )}
-            </section>
-
-            {/* ─── Auto-Apply Applications Dashboard Toggle ─────────────────── */}
-            <div style={{ marginTop: '20px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                onClick={() => setShowApplicationsPanel((s) => !s)}
-                aria-expanded={showApplicationsPanel}
-                aria-controls="applications-panel"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '10px 16px',
-                  borderRadius: '10px',
-                  border: '1px solid var(--navy-primary)',
-                  background: showApplicationsPanel ? 'var(--navy-primary)' : '#FFFFFF',
-                  color: showApplicationsPanel ? '#FFFFFF' : 'var(--navy-primary)',
-                  fontWeight: 700,
-                  fontSize: '0.86rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                <FileCheck2 size={16} strokeWidth={2.2} aria-hidden />
-                <span>
-                  {showApplicationsPanel ? 'Ocultar' : 'Ver'} painel de Auto-Apply
-                </span>
-                <span
-                  aria-hidden
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    minWidth: '22px',
-                    height: '22px',
-                    borderRadius: '11px',
-                    padding: '0 6px',
-                    fontSize: '0.72rem',
-                    fontWeight: 800,
-                    background: showApplicationsPanel ? '#FFFFFF' : 'var(--navy-primary)',
-                    color: showApplicationsPanel ? 'var(--navy-primary)' : '#FFFFFF',
-                  }}
-                >
-                  {Object.values(applicationsSummary).reduce((a, b) => a + b, 0) || '—'}
-                </span>
-              </button>
-            </div>
-
-            {showApplicationsPanel && (
-              <section
-                id="applications-panel"
-                aria-label="Histórico de aplicações automáticas"
-                style={{
-                  marginTop: '16px',
-                  padding: '18px',
-                  borderRadius: '12px',
-                  border: '1px solid #E2E8F0',
-                  background: '#F8FAFC',
-                }}
-              >
-                <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
-                  <h3 style={{ margin: 0, fontSize: '1.02rem', color: 'var(--navy-primary)', fontWeight: 800 }}>
-                    Histórico de Auto-Apply (vagas_compat_automation)
-                  </h3>
-                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                    {['all', 'submitted', 'needs_manual_review', 'failed', 'dry_run'].map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => setApplicationsStatusFilter(s)}
-                        style={{
-                          padding: '6px 10px',
-                          borderRadius: '999px',
-                          border: '1px solid #CBD5E1',
-                          background: applicationsStatusFilter === s ? 'var(--navy-primary)' : '#FFFFFF',
-                          color: applicationsStatusFilter === s ? '#FFFFFF' : 'var(--navy-primary)',
-                          fontSize: '0.74rem',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {s} ({s === 'all' ? Object.values(applicationsSummary).reduce((a, b) => a + b, 0) : applicationsSummary[s] || 0})
-                      </button>
-                    ))}
-                  </div>
-                </header>
-
-                {applicationsLoading && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '20px', color: 'var(--text-muted)' }}>
-                    <RefreshCw size={16} aria-hidden style={{ animation: 'vz-spin 1s linear infinite' }} /> Carregando aplicações…
-                  </div>
-                )}
-
-                {!applicationsLoading && applications.length === 0 && (
-                  <div style={{ padding: '20px', color: 'var(--text-muted)', textAlign: 'center', fontSize: '0.9rem' }}>
-                    Nenhuma aplicação encontrada para esse filtro. Rode o bot
-                    (<code>python3 -m vagas_compat_automation.runner</code>) para popular.
-                  </div>
-                )}
-
-                {!applicationsLoading && applications.length > 0 && (
-                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {applications.map((app, idx) => {
-                      const status = app.status || 'unknown';
-                      const palette: Record<string, { bg: string; fg: string; border: string; label: string }> = {
-                        submitted: { bg: '#ECFDF5', fg: '#065F46', border: '#A7F3D0', label: '✅ Submetida' },
-                        needs_manual_review: { bg: '#FFFBEB', fg: '#92400E', border: '#FDE68A', label: '⚠️ Revisar' },
-                        failed: { bg: '#FEF2F2', fg: '#991B1B', border: '#FECACA', label: '❌ Falhou' },
-                        dry_run: { bg: '#EFF6FF', fg: '#1E40AF', border: '#BFDBFE', label: '�� Dry-run' },
-                        pending: { bg: '#F1F5F9', fg: '#475569', border: '#CBD5E1', label: '⏳ Pendente' },
-                        unknown: { bg: '#F1F5F9', fg: '#475569', border: '#CBD5E1', label: status },
-                      };
-                      const c = palette[status] || palette.unknown;
-                      const when = app.finished_at || app.started_at || app.applied_at || '';
-                      return (
-                        <li
-                          key={app.id || idx}
-                          style={{
-                            padding: '12px',
-                            borderRadius: '10px',
-                            border: `1px solid ${c.border}`,
-                            background: '#FFFFFF',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '6px',
-                          }}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
-                            <div style={{ flex: 1, minWidth: 220 }}>
-                              <div style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--text-primary)' }}>
-                                {app.title || '—'} <span style={{ fontWeight: 500, color: 'var(--text-muted)' }}>@ {app.company || '—'}</span>
-                              </div>
-                              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                                {when && <span>{when} </span>}
-                                {app.score != null && <span>• score {app.score}</span>}
-                                {app.duration_s != null && <span>• {app.duration_s}s</span>}
-                              </div>
-                            </div>
-                            <span
-                              style={{
-                                fontSize: '0.74rem',
-                                fontWeight: 700,
-                                padding: '4px 10px',
-                                borderRadius: '999px',
-                                background: c.bg,
-                                color: c.fg,
-                                border: `1px solid ${c.border}`,
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {c.label}
-                            </span>
-                          </div>
-
-                          {app.url && (
-                            <a
-                              href={app.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{ fontSize: '0.78rem', color: 'var(--navy-primary)', textDecoration: 'none', wordBreak: 'break-all' }}
-                            >
-                              {app.url} ↗
-                            </a>
-                          )}
-
-                          {app.evidence && (app.evidence.thank_you_url || app.evidence.post_submit_url || (app.evidence.confirmation_keywords_found || []).length > 0) && (
-                            <div style={{ fontSize: '0.78rem', color: '#065F46', marginTop: '4px' }}>
-                              {app.evidence.thank_you_url && (
-                                <div>
-                                  Thank-you:{' '}
-                                  <a href={app.evidence.thank_you_url} target="_blank" rel="noopener noreferrer" style={{ color: '#065F46', textDecoration: 'underline' }}>
-                                    {app.evidence.thank_you_url}
-                                  </a>
-                                </div>
-                              )}
-                              {app.evidence.post_submit_url && app.evidence.post_submit_url !== app.evidence.thank_you_url && (
-                                <div style={{ color: 'var(--text-muted)' }}>
-                                  Post-submit: {app.evidence.post_submit_url}
-                                </div>
-                              )}
-                              {(app.evidence.confirmation_keywords_found || []).length > 0 && (
-                                <div style={{ marginTop: '2px' }}>
-                                  Keywords: {app.evidence.confirmation_keywords_found!.join(', ')}
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {app.errors && app.errors.length > 0 && (
-                            <div style={{ fontSize: '0.78rem', color: '#991B1B', marginTop: '4px' }}>
-                              {app.errors.map((e, i) => (
-                                <div key={i}>• {e}</div>
-                              ))}
-                            </div>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </section>
-            )}
-
-            {/* Mobile-only helper text (orientação do scroll horizontal) */}
-            <p className="vz-info-hint" aria-hidden>
-              ← deslize para ver mais dados →
-            </p>
-
-            {/* Habilidades Detectadas — chip row compacto */}
-            {candidateProfile.top_skills?.length > 0 && (
-              <div style={{ marginTop: '16px' }} aria-label="Habilidades detectadas">
-                <span 
-                  className="vz-info-label" 
-                  style={{ 
-                    display: 'block', 
-                    marginBottom: '8px',
-                    fontSize: '0.68rem', 
-                    textTransform: 'uppercase', 
-                    letterSpacing: '0.04em', 
-                    color: 'var(--text-muted)', 
-                    fontWeight: 700 
-                  }}
-                >
-                  Skills:
-                </span>
-                <div className="vz-skills-row">
-                  {candidateProfile.top_skills.map((skill, idx) => (
-                  <span
-                    key={idx}
-                    className="vz-skill-chip"
-                    title={skill}
-                  >
-                    {skill}
-                  </span>
-                ))}
-                </div>
-              </div>
-            )}
-
-            {/* Resumo Executivo (Collapsible) */}
-            {candidateProfile.summary_pt && (
-              <div style={{ marginTop: '16px', padding: '16px', background: 'var(--bg-subtle)', borderRadius: '12px', border: '1px solid var(--border-light)' }}>
-                <div 
-                  onClick={() => setIsSummaryExpanded(!isSummaryExpanded)}
-                  style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center', 
-                    cursor: 'pointer',
-                    marginBottom: isSummaryExpanded ? '12px' : '0'
-                  }}
-                  aria-expanded={isSummaryExpanded}
-                  role="button"
-                  tabIndex={0}
-                >
-                  <span 
-                    className="vz-info-label" 
-                    style={{ 
-                      display: 'block', 
-                      margin: 0, 
-                      fontSize: '0.68rem', 
-                      textTransform: 'uppercase', 
-                      letterSpacing: '0.04em', 
-                      color: 'var(--text-muted)', 
-                      fontWeight: 700 
-                    }}
-                  >
-                    Resumo Executivo
-                  </span>
-                  {isSummaryExpanded ? (
-                    <ChevronUp size={16} color="var(--text-muted)" aria-hidden />
-                  ) : (
-                    <ChevronDown size={16} color="var(--text-muted)" aria-hidden />
-                  )}
-                </div>
-                {isSummaryExpanded && (
-                  <p style={{ fontSize: '0.9rem', color: 'var(--text-main)', lineHeight: 1.5, margin: 0 }}>
-                    {candidateProfile.summary_pt}
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
+          <ProfileDossier profile={candidateProfile} onRemove={removeResume} />
         )}
 
         {resumeError && (
@@ -2560,6 +2153,51 @@ export default function HomePage() {
         </div>
       )}
 
+      {/* MODAL DE INSTALAÇÃO DA EXTENSÃO */}
+      {showExtensionPopup && (
+        <div
+          className="vz-modal-backdrop"
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(4, 56, 115, 0.45)', backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)', zIndex: 115,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowExtensionPopup(false);
+          }}
+        >
+          <div className="whitepace-card vz-modal" style={{ maxWidth: '520px', width: '100%', padding: '28px', background: '#FFFFFF', boxShadow: 'var(--shadow-modal)' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', marginBottom: '18px' }}>
+              <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <AlertCircle size={22} color="#D97706" />
+              </div>
+              <div style={{ flex: 1 }}>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--navy-primary)', margin: '0 0 4px' }}>Extensão Necessária</h3>
+                <p style={{ fontSize: '0.84rem', color: 'var(--text-body)', margin: 0, lineHeight: 1.5 }}>
+                  Para preencher a vaga automaticamente e de forma 100% autônoma, você precisa instalar a nossa Extensão Inteligente para o Chrome.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '10px', padding: '14px 16px', marginBottom: '20px', fontSize: '0.84rem', color: '#1E40AF', lineHeight: 1.55 }}>
+              <strong style={{ display: 'block', marginBottom: '6px' }}>Como instalar:</strong>
+              <ol style={{ margin: 0, paddingLeft: '20px' }}>
+                <li>Baixe o arquivo da extensão (já gerado na pasta <code>public/vagaszap-extension</code>).</li>
+                <li>Abra <a href="chrome://extensions/" target="_blank" rel="noreferrer" style={{fontWeight: 'bold', textDecoration: 'underline'}}>chrome://extensions/</a> numa nova aba.</li>
+                <li>Ative o <strong>Modo do desenvolvedor</strong> no canto superior direito.</li>
+                <li>Clique em <strong>Carregar sem compactação</strong> e selecione a pasta da extensão.</li>
+                <li>Recarregue esta página!</li>
+              </ol>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button onClick={() => setShowExtensionPopup(false)} className="btn-outline" style={{ flex: 1, padding: '10px', fontSize: '0.88rem' }}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 7. MODAL DE EXECUÇÃO DO AUTO-APPLY (CLEAN WHITEPACE SYSTEM) */}
       {selectedJobForApply && (
         <div className="vz-modal-backdrop" style={{
@@ -2594,7 +2232,7 @@ export default function HomePage() {
                   {selectedJobForApply.title}
                 </h3>
                 <div style={{ fontSize: '0.86rem', color: 'var(--blue-accent)', fontWeight: 600 }}>
-                  {selectedJobForApply.company} • Via API Server-side
+                  {selectedJobForApply.company} • Via Extensão Chrome
                 </div>
               </div>
 

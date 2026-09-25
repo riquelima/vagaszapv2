@@ -29,6 +29,7 @@ from . import config
 from . import chrome_applescript as chrome
 from . import minimax_scorer
 from . import supabase_jobs
+from . import greenhouse_public
 
 
 # ---------------------------------------------------------------------------
@@ -176,11 +177,18 @@ def run_once(records: List[Dict[str, Any]]) -> int:
     print(f"\n--- Round @ {time.strftime('%H:%M:%S')} ---")
     already = tracker.already_applied_ids(records)
 
-    print("[1/4] Fetching jobs from Supabase ...")
+    print("[1/4] Fetching jobs from Supabase + Greenhouse ...")
+    jobs: List[Dict[str, Any]] = []
     try:
-        jobs = supabase_jobs.fetch_jobs()
+        jobs.extend(supabase_jobs.fetch_jobs())
     except Exception as exc:  # noqa: BLE001
-        print(f"      fetch error: {exc}")
+        print(f"      supabase fetch error: {exc}")
+    try:
+        jobs.extend(greenhouse_public.fetch_jobs(limit=config.FETCH_LIMIT))
+    except Exception as exc:  # noqa: BLE001
+        print(f"      greenhouse fetch error: {exc}")
+    if not jobs:
+        print("      no jobs fetched from any source")
         return 0
     jobs = [j for j in jobs if j.get("id") not in already]
     print(f"      Got {len(jobs)} new jobs (filtered {len(already)} already applied)")

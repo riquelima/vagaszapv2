@@ -177,6 +177,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             coverLetter: msg.result?.coverLetter || "",
           },
         });
+
+        // Fechar a aba de forma autônoma e silenciosa para não incomodar o usuário
+        if (sender && sender.tab && sender.tab.id) {
+          try {
+            await chrome.tabs.remove(sender.tab.id);
+          } catch (_) {}
+        }
+
         sendResponse({ ok: true });
         return;
       }

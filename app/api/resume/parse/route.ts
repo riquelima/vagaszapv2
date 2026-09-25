@@ -1,175 +1,73 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { parseResumeBuffer } from '@/lib/resume-parser';
+import { parseResumeBuffer, validateResumeInput, MAX_RESUME_BYTES } from '@/lib/resume-parser';
+
+export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 function getSupabase() {
-  // Server-only env vars (no NEXT_PUBLIC_ prefix). We accept the old
-  // NEXT_PUBLIC_* names as a fallback for projects that haven't migrated yet.
-  // We also accept NEXT_SUPABASE_* (without _PUBLIC_) for Vercel projects
-  // that can't use the literal substring "PUBLIC" in env var names.
-  const url =
-    process.env.SUPABASE_URL ||
-    process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    process.env.NEXT_SUPABASE_URL ||
-    '';
-  const serviceKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_ANON_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.NEXT_SUPABASE_ANON_KEY ||
-    '';
-  if (!url || !serviceKey) return null;
-  return createClient(url, serviceKey);
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_SUPABASE_URL || '';
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_SUPABASE_ANON_KEY || '';
+  return url && key ? createClient(url, key) : null;
 }
+const failure = (error: string, status: number) => NextResponse.json({ success: false, error }, { status });
 
 export async function POST(request: Request) {
   try {
-    const supabase = getSupabase();
-
-    // Accept TWO input shapes:
-    //   1. Legacy FormData("file"): kept for backwards compatibility / local dev.
-    //      Limited to 4.5 MB by Vercel's request-body limit.
-    //   2. JSON { storagePath, fileName }: the file is already in Supabase
-    //      Storage (uploaded directly by the client), bypassing the Vercel
-    //      limit. Recommended for production. Allows files up to the bucket's
-    //      configured ceiling (default 50 MB).
     const contentType = request.headers.get('content-type') || '';
     let buffer: Buffer;
-    let originalFileName: string;
+    let fileName: string;
     let storagePath: string | null = null;
-
+    const supabase = getSupabase();
     if (contentType.includes('application/json')) {
-      const body = await request.json().catch(() => ({}));
-      const incomingPath = (body.storagePath || '').toString().trim();
-      const incomingName = (body.fileName || '').toString().trim();
-      if (!incomingPath) {
-        return NextResponse.json(
-          { success: false, error: 'storagePath é obrigatório.' },
-          { status: 400 },
-        );
-      }
-      // Path-traversal guard: only allow simple filenames (no slashes, no '..').
-      if (!/^[A-Za-z0-9._-]+$/.test(incomingPath)) {
-        return NextResponse.json(
-          { success: false, error: 'storagePath inválido.' },
-          { status: 400 },
-        );
-      }
-      if (!supabase) {
-        return NextResponse.json(
-          { success: false, error: 'Supabase não configurado no servidor.' },
-          { status: 500 },
-        );
-      }
-      const { data: dl, error: dlErr } = await supabase.storage
-        .from('resumes')
-        .download(incomingPath);
-      if (dlErr || !dl) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `Falha ao baixar do Storage: ${dlErr?.message || 'arquivo ausente'}`,
-          },
-          { status: 404 },
-        );
-      }
-      const ab = await dl.arrayBuffer();
-      buffer = Buffer.from(ab);
-      storagePath = incomingPath;
-      originalFileName = incomingName || incomingPath;
-    } else {
-      // Legacy multipart upload path.
-      const formData = await request.formData();
-      const file = formData.get('file') as File | null;
-      if (!file) {
-        return NextResponse.json(
-          { success: false, error: 'Nenhum arquivo enviado.' },
-          { status: 400 },
-        );
-      }
+      let body;
+      try { body = await request.json(); } catch { return failure('JSON inválido.', 400); }
+      if (!body || typeof body !== 'object' || typeof body.storagePath !== 'string' || (body.fileName !== undefined && typeof body.fileName !== 'string')) return failure('storagePath e fileName devem ser strings.', 400);
+      const path = body.storagePath.trim();
+      if (!/^[A-Za-z0-9._-]+$/.test(path) || path.includes('..')) return failure('storagePath inválido.', 400);
+      fileName = body.fileName?.trim() || path;
+      const invalid = validateResumeInput(fileName, 1);
+      if (invalid) return failure(invalid, 400);
+      if (!supabase) return failure('Supabase não configurado no servidor.', 500);
+      const { data, error } = await supabase.storage.from('resumes').download(path);
+      if (error || !data) return failure('Não foi possível baixar o arquivo do Storage.', 404);
+      const sizeError = validateResumeInput(fileName, data.size);
+      if (sizeError) return failure(sizeError, 400);
+      buffer = Buffer.from(await data.arrayBuffer());
+      storagePath = path;
+    } else if (contentType.includes('multipart/form-data')) {
+      const length = Number(request.headers.get('content-length'));
+      if (length > MAX_RESUME_BYTES + 64 * 1024) return failure('Arquivo maior que 10 MB.', 400);
+      let form;
+      try { form = await request.formData(); } catch { return failure('Formulário inválido.', 400); }
+      const file = form.get('file');
+      if (!file || typeof file === 'string') return failure('Nenhum arquivo válido enviado.', 400);
+      fileName = file.name;
+      const invalid = validateResumeInput(fileName, file.size);
+      if (invalid) return failure(invalid, 400);
       buffer = Buffer.from(await file.arrayBuffer());
-      originalFileName = file.name || 'upload';
-    }
+    } else return failure('Use multipart/form-data ou application/json.', 400);
 
-    const safeExt = originalFileName.endsWith('.docx')
-      ? '.docx'
-      : originalFileName.endsWith('.doc')
-        ? '.doc'
-        : originalFileName.endsWith('.png')
-          ? '.png'
-          : originalFileName.endsWith('.jpg') || originalFileName.endsWith('.jpeg')
-            ? '.jpg'
-            : '.pdf';
+    const invalid = validateResumeInput(fileName, buffer.length);
+    if (invalid) return failure(invalid, 400);
+    const result = await parseResumeBuffer(buffer, fileName);
+    if (!result.success || !result.profile) return failure(result.error || 'Falha ao extrair o currículo.', 422);
 
-    // Parse the buffer in pure Node — no Python dependency, works on Vercel.
-    // We never let a parse failure throw: if the LLM extractor or any sub-step
-    // fails, we fall back to the deterministic local builder so the user
-    // always gets a usable profile.
-    let result = await parseResumeBuffer(buffer, originalFileName);
-    if (!result.success || !result.profile) {
-      console.warn(
-        '[resume/parse] primary parser failed, forcing local fallback:',
-        result.error,
-      );
-      // Defensive rebuild using only the entities path. Since parseResumeBuffer
-      // already wraps its body in try/catch, this branch should be rare; we
-      // still want a usable 200 response instead of a 500.
-      result = {
-        success: true,
-        profile: (result as any).profile || {},
-        raw_text_length: 0,
-        has_photo: false,
-        error: result.error,
-      } as any;
-    }
-
-    // Resolve the public URL of the file we already have in Storage
-    // (either the client uploaded it directly, or the legacy path uploads
-    // it below). Re-uploading from buffer is idempotent thanks to upsert.
     let resumeUrl = '';
-    const finalStorageName = storagePath
-      ? storagePath
-      : `${Date.now()}_${Math.random().toString(36).substring(7)}${safeExt}`;
-
     if (supabase) {
-      // If the legacy path didn't pre-upload, do it now so the profile carries
-      // a resume_url. The storage path for the legacy path is also derived.
-      if (!storagePath) {
-        const { error: uploadError } = await supabase.storage
-          .from('resumes')
-          .upload(finalStorageName, buffer, {
-            contentType: 'application/octet-stream',
-            upsert: true,
-          });
-        if (uploadError) {
-          console.warn('Legacy resume upload failed:', uploadError);
-        }
+      const ext = fileName.slice(fileName.lastIndexOf('.')).toLowerCase();
+      const path = storagePath || `${crypto.randomUUID()}${ext}`;
+      let stored = Boolean(storagePath);
+      if (!stored) {
+        const { error } = await supabase.storage.from('resumes').upload(path, buffer, { contentType: ext === '.pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', upsert: false });
+        stored = !error;
+        if (error) (result.profile.extraction_warnings as string[]).push('Texto extraído, mas não foi possível armazenar o currículo.');
       }
-      const { data: publicUrlData } = supabase.storage
-        .from('resumes')
-        .getPublicUrl(finalStorageName);
-      resumeUrl = publicUrlData.publicUrl;
-    } else {
-      console.warn('Supabase client not initialized, skipping resume URL.');
+      if (stored) resumeUrl = supabase.storage.from('resumes').getPublicUrl(path).data.publicUrl;
     }
-
-    (result.profile as Record<string, unknown>).resume_url = resumeUrl;
-
-    return NextResponse.json({
-      success: true,
-      profile: result.profile,
-      fileName: originalFileName,
-      fileSize: `${(buffer.length / 1024).toFixed(1)} KB`,
-      warning: result.error || undefined,
-    });
-  } catch (error: any) {
-    console.error('Erro na rota /api/resume/parse:', error);
-    // Return 200 with a structured error so the client UI can degrade
-    // gracefully instead of treating it as a hard upload failure.
-    return NextResponse.json({
-      success: false,
-      error: error?.message || 'Erro ao processar currículo.',
-      degraded: true,
-    });
+    result.profile.resume_url = resumeUrl;
+    return NextResponse.json({ success: true, profile: result.profile, fileName, fileSize: `${(buffer.length / 1024).toFixed(1)} KB` });
+  } catch {
+    return failure('Erro interno ao processar currículo.', 500);
   }
 }
